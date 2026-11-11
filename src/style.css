@@ -27,3 +27,49 @@
   .inspector-panel { min-height: 250px; }
   .statusbar { position: static; min-height: 42px; padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
 }
+
+
+/* Mobile landscape-first editing workspace */
+.orientation-gate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(5,7,12,.97);backdrop-filter:blur(16px)}
+.orientation-card{width:min(100%,390px);display:flex;flex-direction:column;align-items:center;text-align:center;padding:28px 22px;border:1px solid #49345e;border-radius:18px;background:linear-gradient(145deg,#1b1726,#10131c);box-shadow:0 24px 80px #0009}
+.orientation-icon{position:relative;width:76px;height:76px;display:grid;place-items:center;margin-bottom:20px;border-radius:20px;background:#2a1e38;color:#d7a0fa}
+.orientation-icon svg+svg{position:absolute;right:-7px;bottom:-6px;padding:4px;border-radius:50%;background:#a956d0;color:#fff}
+.orientation-card h1{margin:8px 0 6px;font-size:23px;letter-spacing:-.7px;color:#f2eafa}
+.orientation-card p{max-width:310px;margin:8px 0 18px;color:#a9a5b5;font-size:12px;line-height:1.65}
+.orientation-action{justify-content:center;min-height:42px;padding:0 18px}
+.orientation-card>small{max-width:290px;margin-top:15px;color:#777d8e;font-size:10px;line-height:1.5}
+@media (max-width:900px) and (orientation:landscape){
+  body{min-width:0;min-height:0;overflow:hidden}
+  .app-shell{width:100%;height:100dvh;min-height:0;overflow:hidden}
+  .topbar{height:46px;min-height:46px;padding:0 10px;flex-wrap:nowrap}
+  .brand{font-size:16px;gap:7px}.brand-mark{width:27px;height:27px}.version{font-size:8px;padding:3px 5px}
+  .project-name{display:none}.top-actions{margin-left:auto}.btn{padding:7px 9px;font-size:10px}
+  .workspace{display:grid;grid-template-columns:minmax(112px,17vw) minmax(260px,1fr) minmax(135px,20vw);gap:6px;padding:6px;min-height:0;overflow:hidden}
+  .media-panel,.inspector-panel{min-height:0;max-height:none}
+  .panel-heading,.inspector-panel .panel-heading{height:46px;min-height:46px;padding:0 9px}
+  .panel-heading h2,.timeline-title h2{font-size:12px}.eyebrow{font-size:8px}
+  .import-drop{margin:8px 7px 10px;min-height:66px;gap:4px}.import-drop strong{font-size:9px}.import-drop span{font-size:8px}
+  .asset-heading{padding:0 8px 6px;font-size:8px}.asset-list{padding:0 5px}
+  .asset-row{gap:6px;padding:6px 5px}.asset-icon{width:25px;height:25px}.asset-meta strong{max-width:calc(17vw - 48px);font-size:8px}.asset-meta small{font-size:7px}
+  .storage-note{padding:7px;font-size:7px}
+  .center-panel{min-height:0;gap:6px}.preview-panel{flex:1;min-height:100px}.preview-heading{height:39px;min-height:39px}
+  .preview-stage{padding:6px;min-height:0}.preview-empty{gap:5px}.preview-logo{width:38px;height:38px;border-radius:10px}.preview-empty strong{font-size:10px}.preview-empty span{font-size:8px}
+  .transport{height:34px;min-height:34px;padding:0 8px}.transport-controls{gap:10px}.play-btn{width:25px;height:25px}.timecode{font-size:9px}
+  .timeline-panel{height:clamp(132px,29vh,190px);min-height:132px}
+  .timeline-toolbar{height:39px;min-height:39px;padding:0 7px;gap:6px}.timeline-title{min-width:53px}.edit-tools{gap:3px}
+  .tool-btn{height:24px;padding:0 5px;font-size:8px;gap:3px}.tool-btn svg{width:12px;height:12px}
+  .zoom-control{gap:4px;font-size:8px}.zoom-control input{width:42px}
+  .timeline-ruler-wrap{height:24px}.track-label-spacer,.track-label{width:76px}.track-label{gap:5px;padding:0 6px}.track-label svg{width:12px}.track-label strong{font-size:7px}.track-label small{font-size:6px}
+  .track-row{height:42px}.timeline-clip{top:5px;height:32px;padding:0 5px;gap:4px}.clip-name{font-size:7px}.clip-duration{font-size:6px}
+  .timeline-footer{height:21px;padding:0 7px;font-size:7px}.timeline-footer span:first-child{max-width:65%;overflow:hidden;white-space:nowrap}
+  .playhead{left:76px}
+  .inspector-content{padding:8px}.selected-file{padding:2px 0 9px;gap:4px}.selected-file-icon{width:30px;height:30px}.selected-file-icon svg{width:15px}.selected-file strong{font-size:8px;max-width:100%}.selected-file small{font-size:7px}
+  .property-group{padding:8px 0}.property-group>label{font-size:7px;margin-bottom:5px}.property-input{height:24px;padding:0 6px}.property-input span,.property-input strong{font-size:8px}.wide-action{padding:5px;font-size:8px}
+  .ai-card{margin:6px;padding:7px}.ai-card-title strong{font-size:8px}.ai-card p{font-size:7px;margin:5px 0}.toggle-row{font-size:8px}
+  .statusbar{height:20px;min-height:20px;padding:0 8px;font-size:7px}
+}
+@media (max-width:900px) and (orientation:portrait){
+  .app-shell{height:100dvh;min-height:0;overflow:hidden}
+  .workspace{display:none}
+  .topbar,.statusbar{opacity:.25;pointer-events:none}
+}
