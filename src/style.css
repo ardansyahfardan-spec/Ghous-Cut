@@ -775,3 +775,161 @@ body.library-page #root {
   .inspector-panel.mobile-open .inspector-content { overflow-y: auto; min-height: 0; }
   .inspector-panel.mobile-open .ai-card { display: none; }
 }
+
+
+/* Final mobile editor refinement: predictable portrait grid and consistent icon controls */
+@media (max-width: 760px) {
+  .app-shell {
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .topbar {
+    flex: 0 0 54px;
+    min-height: 54px;
+    padding-inline: max(9px, env(safe-area-inset-left));
+    gap: 7px;
+  }
+  .brand { flex: 0 1 auto; }
+  .project-name {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    justify-content: flex-start;
+  }
+  .top-actions { gap: 4px; }
+  .top-actions .btn {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .top-actions .btn svg { width: 17px; height: 17px; stroke-width: 1.9; }
+  .workspace {
+    flex: 1 1 0;
+    min-height: 0;
+    display: block;
+    padding: 7px;
+    overflow: hidden;
+  }
+  .center-panel {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(145px, .92fr) minmax(215px, 1.08fr);
+    gap: 7px;
+    overflow: hidden;
+  }
+  .preview-panel,
+  .timeline-panel {
+    min-height: 0;
+    max-height: none;
+    height: auto;
+    flex: none;
+    width: 100%;
+  }
+  .preview-panel { display: flex; }
+  .preview-stage { min-height: 0; }
+  .timeline-panel { display: flex; }
+  .timeline-toolbar {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title zoom" "tools tools";
+    align-items: center;
+    gap: 7px;
+    padding: 7px 8px 5px;
+  }
+  .timeline-title { grid-area: title; min-width: 0; }
+  .zoom-control { grid-area: zoom; justify-self: end; }
+  .edit-tools {
+    grid-area: tools;
+    min-width: 0;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    gap: 6px;
+  }
+  .tool-btn {
+    flex: 0 0 36px;
+    width: 36px;
+    min-width: 36px;
+    height: 35px;
+    border-radius: 9px;
+    border: 1px solid var(--gc-border);
+    background: var(--gc-surface-raised);
+    color: var(--gc-text);
+  }
+  .tool-btn svg { width: 17px; height: 17px; stroke-width: 1.9; }
+  .tool-btn:active, .top-actions .btn:active, .transport button:active {
+    transform: scale(.96);
+  }
+  .zoom-control { gap: 5px; }
+  .zoom-control .zoom-step {
+    width: 27px;
+    min-width: 27px;
+    height: 27px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .zoom-control .zoom-reset {
+    height: 27px;
+    min-width: 42px;
+    border-radius: 7px;
+  }
+  .transport {
+    flex: 0 0 42px;
+    min-height: 42px;
+  }
+  .transport-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+  }
+  .track-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .track-mute {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+  }
+  .project-card-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+  .mobile-properties-action { display: inline-flex !important; }
+}
+@media (max-width: 390px) {
+  .topbar { gap: 5px; padding-inline: 7px; }
+  .brand { gap: 4px; font-size: 13px; }
+  .top-actions { gap: 3px; }
+  .top-actions .btn { width: 30px; min-width: 30px; height: 30px; }
+  .project-name { font-size: 9px; }
+  .workspace { padding: 5px; }
+  .center-panel { grid-template-rows: minmax(130px, .88fr) minmax(210px, 1.12fr); gap: 5px; }
+  .timeline-toolbar { padding-inline: 6px; }
+  .zoom-control input { width: 42px; }
+  .tool-btn { flex-basis: 34px; width: 34px; min-width: 34px; }
+}
+@media (max-height: 560px) and (max-width: 760px) and (orientation: landscape) {
+  .center-panel { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .preview-panel, .timeline-panel { min-height: 0; }
+  .timeline-toolbar { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "title zoom" "tools tools"; }
+}
