@@ -644,3 +644,46 @@ body { overflow-x: hidden; overflow-y: auto; }
     touch-action: pan-y pan-x;
   }
 }
+
+
+/* Final iOS landscape library scroll fix: make the library itself a fixed,
+   independently scrollable viewport. This avoids depending on body scrolling
+   when the editor's landscape rules lock the document. */
+@media (max-width: 900px) and (orientation: landscape) {
+  html, body, #root {
+    width: 100%;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+  body {
+    height: 100%;
+    overflow: hidden !important;
+  }
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+  .project-library {
+    position: fixed !important;
+    inset: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: scroll !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y !important;
+  }
+  .library-topbar {
+    position: relative;
+  }
+  .library-content {
+    height: auto !important;
+    min-height: calc(100% + 1px) !important;
+    padding-bottom: max(96px, env(safe-area-inset-bottom)) !important;
+  }
+}
