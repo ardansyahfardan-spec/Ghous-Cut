@@ -333,16 +333,30 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       const mod = event.ctrlKey || event.metaKey;
       if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
       if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
+      if (mod && event.key.toLowerCase() === "b") { event.preventDefault(); splitSelected(); return; }
       if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
       if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project save requested."); return; }
       if (mod && event.key.toLowerCase() === "e") { event.preventDefault(); void exportVideo(); return; }
       if (mod) return;
       switch (event.key) {
         case " ": event.preventDefault(); togglePlayback(); break;
-        case "s": case "S": event.preventDefault(); splitSelected(); break;
         case "Delete": case "Backspace": event.preventDefault(); removeSelected(); break;
-        case "ArrowLeft": event.preventDefault(); setPlayhead(v => Math.max(0, v - (event.shiftKey ? 5 : 1))); break;
-        case "ArrowRight": event.preventDefault(); setPlayhead(v => Math.min(duration, v + (event.shiftKey ? 5 : 1))); break;
+        case "q": case "Q": event.preventDefault(); trimLeft(); break;
+        case "w": case "W": event.preventDefault(); trimRight(); break;
+        case "ArrowLeft": event.preventDefault(); setPlayhead(v => Math.max(0, v - 1 / 30)); break;
+        case "ArrowRight": event.preventDefault(); setPlayhead(v => Math.min(duration, v + 1 / 30)); break;
+        case "ArrowUp": {
+          event.preventDefault();
+          const cuts = clips.flatMap(c => [c.start, c.start + c.duration]).filter(t => t < playhead - 0.001);
+          setPlayhead(cuts.length ? Math.max(...cuts) : 0);
+          break;
+        }
+        case "ArrowDown": {
+          event.preventDefault();
+          const cuts = clips.flatMap(c => [c.start, c.start + c.duration]).filter(t => t > playhead + 0.001);
+          setPlayhead(cuts.length ? Math.min(...cuts) : duration);
+          break;
+        }
         case "Home": event.preventDefault(); setPlayhead(0); break;
         case "End": event.preventDefault(); setPlayhead(duration); break;
         case "Escape": setPlaying(false); previewRef.current?.pause(); audioRef.current?.pause(); break;
@@ -439,7 +453,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             </div>)}
             <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
           </div>
-          <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · S split · Del remove · Ctrl+Z undo</span><span>{clips.length} clips · {fmt(duration)} workspace</span></div>
+          <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · Ctrl+B split · Q/W trim · Del remove · Ctrl+Z undo</span><span>{clips.length} clips · {fmt(duration)} workspace</span></div>
         </div>
       </section>
 
@@ -457,8 +471,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     {showShortcuts && <div className="shortcuts-backdrop" role="presentation" onClick={() => setShowShortcuts(false)}>
       <section className="shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" onClick={e => e.stopPropagation()}>
         <header><div><span className="eyebrow">GHOUS CUT · EDITOR</span><h2 id="shortcuts-title">Keyboard shortcuts</h2></div><button className="icon-btn" onClick={() => setShowShortcuts(false)} aria-label="Close shortcuts"><X size={16}/></button></header>
-        <div className="shortcut-group"><h3>Playback & navigation</h3><div><span>Play / Pause</span><kbd>Space</kbd></div><div><span>Step back / forward 1 second</span><kbd>←</kbd><kbd>→</kbd></div><div><span>Step back / forward 5 seconds</span><kbd>Shift</kbd><kbd>← / →</kbd></div><div><span>Go to beginning / end</span><kbd>Home</kbd><kbd>End</kbd></div><div><span>Stop playback</span><kbd>Esc</kbd></div></div>
-        <div className="shortcut-group"><h3>Editing</h3><div><span>Split at playhead</span><kbd>S</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></div></div>
+        <div className="shortcut-group"><h3>Playback & navigation</h3><div><span>Play / Pause</span><kbd>Space</kbd></div><div><span>Previous / next frame</span><kbd>←</kbd><kbd>→</kbd></div><div><span>Previous / next edit point</span><kbd>↑</kbd><kbd>↓</kbd></div><div><span>Go to beginning / end</span><kbd>Home</kbd><kbd>End</kbd></div><div><span>Stop playback</span><kbd>Esc</kbd></div></div>
+        <div className="shortcut-group"><h3>Editing</h3><div><span>Split selected clip at playhead</span><kbd>Ctrl</kbd><kbd>B</kbd></div><div><span>Trim left / right to playhead</span><kbd>Q</kbd><kbd>W</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></div></div>
         <div className="shortcut-group"><h3>Project</h3><div><span>Import media</span><kbd>Ctrl</kbd><kbd>I</kbd></div><div><span>Save project file</span><kbd>Ctrl</kbd><kbd>S</kbd></div><div><span>Export video</span><kbd>Ctrl</kbd><kbd>E</kbd></div></div>
         <p>Shortcut tidak aktif saat kamu sedang mengetik di kolom input.</p>
       </section>
