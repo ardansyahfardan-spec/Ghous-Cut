@@ -9,7 +9,7 @@
 .statusbar{height:27px;flex:none;border-top:1px solid #252936;background:#0e1017;display:flex;align-items:center;justify-content:space-between;padding:0 15px;color:#85899a;font-size:9px}.statusbar>div{display:flex;align-items:center;gap:8px}.statusbar svg{color:#bd82df}.status-sep{color:#454958}
 @media(max-width:1150px){.workspace{grid-template-columns:210px minmax(400px,1fr) 220px;gap:8px;padding:8px}.timeline-toolbar{gap:8px}.tool-btn{padding:0 6px}.track-label,.track-label-spacer{width:100px}.playhead{left:100px}.timeline-footer{font-size:8px}}
 /* Responsive layout for phones and narrow tablets */
-@media (max-width: 760px) {
+@media (max-width: 760px) and (orientation: portrait) {
   body { min-width: 0; min-height: 100vh; }
   .app-shell { height: auto; min-height: 100vh; overflow: visible; }
   .topbar { height: auto; min-height: 60px; padding: 10px 12px; gap: 10px; flex-wrap: wrap; }
@@ -183,3 +183,68 @@ kbd{min-width:25px;padding:4px 7px;border:1px solid #51445f;border-bottom-width:
 .history-tool{width:29px;justify-content:center;padding:0}
 @media(max-width:1150px){.shortcut-help-btn{font-size:0;gap:0}.shortcut-help-btn svg{width:16px;height:16px}}
 @media(max-width:900px) and (orientation:landscape){.shortcut-help-btn{padding:6px 7px}.history-tool{height:23px;width:24px}}
+
+
+/* Compact landscape workspace for phones: keep the preview and timeline side-by-side. */
+@media (max-width: 950px) and (orientation: landscape) {
+  .app-shell { height: 100dvh; min-height: 0; overflow: hidden; }
+  .topbar { height: 48px; min-height: 48px; padding: 0 9px; gap: 8px; }
+  .brand { font-size: 16px; gap: 6px; }
+  .brand .version { display: none; }
+  .project-name { font-size: 10px; }
+  .top-actions { gap: 5px; }
+  .top-actions .btn { min-height: 29px; padding: 5px 7px; font-size: 9px; }
+  .top-actions .btn svg { width: 13px; height: 13px; }
+  .workspace { display: grid; grid-template-columns: 145px minmax(300px, 1fr) 165px; gap: 6px; padding: 6px; min-height: 0; }
+  .panel { border-radius: 7px; }
+  .panel-heading { height: 47px; padding: 0 8px; }
+  .panel-heading h2, .timeline-title h2 { font-size: 12px; }
+  .import-drop { margin: 7px; min-height: 58px; gap: 3px; }
+  .import-drop svg { width: 16px; height: 16px; }
+  .import-drop strong { font-size: 9px; }
+  .import-drop span { font-size: 8px; }
+  .asset-list { padding: 0 4px; }
+  .asset-row { gap: 5px; padding: 6px 4px; }
+  .asset-meta strong { font-size: 9px; }
+  .asset-meta small { font-size: 8px; }
+  .center-panel { min-width: 0; gap: 6px; }
+  .preview-panel { min-height: 0; }
+  .preview-heading { height: 38px; }
+  .preview-stage { min-height: 0; height: calc(100% - 38px); }
+  .timeline-panel { min-height: 0; }
+  .timeline-toolbar { min-height: 42px; height: auto; padding: 4px 6px; gap: 5px; flex-wrap: nowrap; }
+  .timeline-title { min-width: 48px; }
+  .edit-tools { gap: 3px; }
+  .tool-btn { height: 26px; padding: 0 5px; font-size: 0; gap: 0; }
+  .tool-btn span { display: none; }
+  .tool-btn svg { width: 13px; height: 13px; }
+  .zoom-control { gap: 3px; }
+  .zoom-control input { width: 42px; }
+  .track-label, .track-label-spacer { width: 82px; }
+  .track-label { padding: 0 5px; gap: 4px; }
+  .track-label strong { font-size: 8px; }
+  .track-label small { display: none; }
+  .playhead { left: 82px; }
+  .inspector-content { padding: 8px; }
+  .property-group { padding: 8px 0; }
+  .property-group label { font-size: 8px; }
+  .property-input { font-size: 9px; }
+  .ai-card { padding: 8px; }
+  .ai-card p { font-size: 8px; }
+  .statusbar { height: 22px; min-height: 22px; padding: 0 8px; font-size: 8px; }
+}
+@media (max-width: 760px) and (orientation: landscape) {
+  .workspace { grid-template-columns: 112px minmax(260px, 1fr) 128px; gap: 4px; padding: 4px; }
+  .topbar { padding: 0 6px; }
+  .brand > span:not(.brand-accent) { font-size: 14px; }
+  .brand-mark { width: 24px; height: 24px; }
+  .top-actions .btn { padding: 4px 5px; }
+  .top-actions .btn:not(.primary) { font-size: 0; gap: 0; }
+  .top-actions .btn:not(.primary) svg { width: 15px; height: 15px; }
+  .project-name { display: none; }
+  .track-label, .track-label-spacer { width: 64px; }
+  .playhead { left: 64px; }
+  .inspector-panel .ai-card { display: none; }
+  .zoom-control input { width: 30px; }
+  .timeline-title { display: none; }
+}
