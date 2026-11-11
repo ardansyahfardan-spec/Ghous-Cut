@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { createProject, deleteProject, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
+import { createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
@@ -32,7 +32,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, aspectRatio, onBack }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void }) {
+function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
@@ -290,7 +290,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack }: { proj
     <header className="topbar">
       <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><GhostMark size={21}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
-      <div className="top-actions"><button className="btn ghost" onClick={importMedia}><FolderOpen size={15}/> Import</button><button className="btn primary" onClick={exportVideo} disabled={exporting}><Download size={15}/>{exporting ? "Rendering…" : "Export"}</button></div>
+      <div className="top-actions"><button className="btn ghost" onClick={importMedia}><FolderOpen size={15}/> Import</button><button className="btn ghost" onClick={() => void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() })}><Download size={15}/> Save Project</button><button className="btn primary" onClick={exportVideo} disabled={exporting}><Download size={15}/>{exporting ? "Rendering…" : "Export"}</button></div>
     </header>
 
     <main className="workspace">
@@ -305,7 +305,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack }: { proj
             <span className="asset-meta"><strong>{c.name}</strong><small>{c.kind.toUpperCase()} · {fmt(c.duration)}</small></span>
           </button>)}
         </div>
-        <div className="storage-note"><span className="storage-dot"/> {isDesktop ? "Local project · Files stay on your PC" : "Auto-save · This browser & device"}</div>
+        <div className="storage-note"><span className="storage-dot"/> {isDesktop ? "Local files · Saved on this PC" : "Session only · Save the .ghcut project file"}</div>
       </aside>
 
       <section className="center-panel">
@@ -407,7 +407,28 @@ export default function App() {
   const [draftName, setDraftName] = useState("");
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
-  const [phonePortrait, setPhonePortrait] = useState(false);
+  const [phonePortrait, setPhonePortrait] = useState(false);\n  const projectFileInputRef = useRef<HTMLInputElement>(null);
+
+  const exportProject = async (project: StoredProject<Clip>) => {
+    try {
+      const saved = await exportProjectFile(project);
+      if (saved) setStorageError("");
+    } catch (error) {
+      setStorageError(`Gagal menyimpan file proyek: ${String(error)}`);
+    }
+  };
+
+  const importProject = async (file: File) => {
+    try {
+      const project = await importProjectFile(file) as ProjectCard;
+      await refreshProjects();
+      setActiveProject(project);
+      setScreen("editor");
+      setStorageError("");
+    } catch (error) {
+      setStorageError(`File proyek tidak dapat dibuka: ${String(error)}`);
+    }
+  };
 
   const refreshProjects = async () => {
     try {
@@ -511,7 +532,7 @@ export default function App() {
     <section className="library-content">
       <div className="library-welcome">
         <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru.</p></div>
-        <button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button>
+        <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
       </div>
       <div className="library-toolbar">
         <label className="project-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari proyek..." /></label>
@@ -536,7 +557,7 @@ export default function App() {
         </article>)}
       </div>}
     </section>
-    {creating && <div className="project-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setCreating(false); }}>
+    <input ref={projectFileInputRef} type="file" accept=".ghcut,application/json" hidden onChange={e => { const file = e.target.files?.[0]; if (file) void importProject(file); e.currentTarget.value = ""; }} />\n    {creating && <div className="project-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setCreating(false); }}>
       <form className="project-modal" onSubmit={e => { e.preventDefault(); void startProject(); }}>
         <div className="modal-heading"><div><span className="library-kicker">NEW CREATION</span><h2>Buat proyek baru</h2></div><button type="button" onClick={() => setCreating(false)} aria-label="Tutup"><X size={18}/></button></div>
         <label className="project-name-field">Nama proyek<input autoFocus value={draftName} onChange={e => setDraftName(e.target.value)} placeholder="Contoh: Video Liburan" maxLength={70}/></label>
