@@ -49,6 +49,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [exporting, setExporting] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMobileInspector, setShowMobileInspector] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -686,6 +687,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               }}>
                 {clips.filter(c=>c.track===t.id).map(c=><div key={c.id} draggable={false}
                   onDragStart={e=>e.preventDefault()}
+                  onContextMenu={e=>{ if(window.matchMedia("(pointer: fine)").matches){ e.preventDefault(); selectClip(c); setContextMenu({x:e.clientX,y:e.clientY,clipId:c.id}); } }}
                   onPointerDown={e=>{
                     if(e.button!==0) return;
                     e.preventDefault();
@@ -734,6 +736,17 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         <div className="ai-card"><div className="ai-card-title"><Sparkles size={15}/><strong>Audio enhancement</strong><span className="beta-pill">BETA</span></div><p>Reduce steady background noise in your exported video using FFmpeg denoising.</p><label className="toggle-row"><span><Volume2 size={15}/> Noise reduction</span><input type="checkbox" checked={denoise} onChange={e=>setDenoise(e.target.checked)}/><i/></label></div>
       </aside>
     </main>
+    {contextMenu && <div className="context-menu-layer" onPointerDown={()=>setContextMenu(null)}>
+      <div className="context-menu" role="menu" aria-label="Clip actions" style={{left:Math.min(contextMenu.x,window.innerWidth-224),top:Math.min(contextMenu.y,window.innerHeight-330)}} onPointerDown={e=>e.stopPropagation()}>
+        <div className="context-menu-heading">CLIP ACTIONS</div>
+        <button role="menuitem" onClick={()=>{setPlayhead(clips.find(c=>c.id===contextMenu.clipId)?.start ?? playhead);setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);}}><MousePointer2 size={15}/> Select clip</button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);splitSelected();}}><Scissors size={15}/> Split at playhead <kbd>Ctrl+B</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);copySelected();}}><Copy size={15}/> Copy <kbd>Ctrl+C</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);duplicateSelected();}}><CopyPlus size={15}/> Duplicate <kbd>Ctrl+D</kbd></button>
+        <div className="context-menu-divider"/>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);removeSelected();}} className="context-danger"><Trash2 size={15}/> Delete <kbd>Del</kbd></button>
+      </div>
+    </div>}
     {showShortcuts && <div className="shortcuts-backdrop" role="presentation" onClick={() => setShowShortcuts(false)}>
       <section className="shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" onClick={e => e.stopPropagation()}>
         <header><div><span className="eyebrow">GHOUS CUT · EDITOR</span><h2 id="shortcuts-title">Keyboard shortcuts</h2></div><button className="icon-btn" onClick={() => setShowShortcuts(false)} aria-label="Close shortcuts"><X size={16}/></button></header>
