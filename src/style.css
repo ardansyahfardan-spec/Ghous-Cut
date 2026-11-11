@@ -623,3 +623,24 @@ body { overflow-x: hidden; overflow-y: auto; }
     padding-bottom: max(64px, env(safe-area-inset-bottom));
   }
 }
+
+
+/* The library is a document page, not the fixed-height editor. On mobile landscape,
+   override the editor's body overflow lock so iOS Safari scrolls the document itself. */
+@media (max-width: 900px) and (orientation: landscape) {
+  html:has(.project-library),
+  body:has(.project-library) {
+    height: auto !important;
+    min-height: 100%;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .project-library {
+    height: auto !important;
+    min-height: 100dvh;
+    max-height: none !important;
+    overflow: visible !important;
+    touch-action: pan-y pan-x;
+  }
+}
