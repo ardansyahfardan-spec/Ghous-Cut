@@ -34,6 +34,8 @@ const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
 function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
   const [clips, setClips] = useState<Clip[]>([]);
+  const undoStack = useRef<Clip[][]>([]);
+  const redoStack = useRef<Clip[][]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -105,6 +107,29 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const scale = SCALE * zoom;
   const selectedSrc = currentPreview?.src || "";
 
+  const updateTimeline = (updater: (previous: Clip[]) => Clip[]) => {
+    setClips(previous => {
+      undoStack.current.push(previous);
+      if (undoStack.current.length > 100) undoStack.current.shift();
+      redoStack.current = [];
+      return updater(previous);
+    });
+  };
+  const undo = () => setClips(previous => {
+    const prior = undoStack.current.pop();
+    if (!prior) return previous;
+    redoStack.current.push(previous);
+    setNotice("Undo.");
+    return prior;
+  });
+  const redo = () => setClips(previous => {
+    const next = redoStack.current.pop();
+    if (!next) return previous;
+    undoStack.current.push(previous);
+    setNotice("Redo.");
+    return next;
+  });
+
   // Let the browser's native media pipeline drive video/audio playback.
   // A React timer that repeatedly seeks the video element causes dropped frames.
   useEffect(() => {
@@ -148,7 +173,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         kind, track, start, sourceIn: 0, duration, volume: 1
       };
     });
-    setClips(old => [...old, ...newClips]);
+    updateTimeline(old => [...old, ...newClips]);
     if (newClips[0]) { setSelected(newClips[0].id); setPlayhead(newClips[0].start); }
     setNotice(`Imported ${newClips.length} media file(s).`);
   };
@@ -196,7 +221,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         kind, track, start, sourceIn: 0, duration, volume: 1
       });
     }
-    setClips(old => [...old.map(c => relinked.get(c.id) ?? c), ...additions]);
+    updateTimeline(old => [...old.map(c => relinked.get(c.id) ?? c), ...additions]);
     const first = [...relinked.values(), ...additions][0];
     if (first) { setSelected(first.id); setPlayhead(first.start); }
     const relinkCount = relinked.size;
@@ -215,7 +240,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   };
 
   const updateClip = (id: string, patch: Partial<Clip>) =>
-    setClips(old => old.map(c => c.id === id ? { ...c, ...patch } : c));
+    updateTimeline(old => old.map(c => c.id === id ? { ...c, ...patch } : c));
 
   const splitSelected = () => {
     if (!active) return setNotice("Select a clip first.");
@@ -226,7 +251,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt
     };
     updateClip(active.id, { duration: cutAt });
-    setClips(old => [...old, right]);
+    updateTimeline(old => [...old, right]);
     setSelected(right.id);
     setNotice("Clip split at playhead.");
   };
@@ -247,12 +272,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   };
   const removeSelected = () => {
     if (!active) return;
-    setClips(old => old.filter(c => c.id !== active.id));
+    updateTimeline(old => old.filter(c => c.id !== active.id));
     setSelected(null);
     setNotice("Clip removed from timeline.");
   };
   const moveClip = (id: string, track: number, start: number) => {
-    setClips(old => old.map(c => c.id === id ? { ...c, track, start: Math.max(0, start) } : c));
+    updateTimeline(old => old.map(c => c.id === id ? { ...c, track, start: Math.max(0, start) } : c));
     setDragging(null);
   };
 
@@ -296,9 +321,36 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     setPlaying(true);
   };
 
-  const currentPreview = active || activeAtPlayhead;
+
   const previewTime = currentPreview ? Math.max(0, currentPreview.sourceIn + playhead - currentPreview.start) : 0;
   const trackEnd = (track: number) => clips.filter(c => c.track === track).reduce((m,c) => Math.max(m,c.start+c.duration), 0);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const editingText = !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (editingText || event.altKey || event.metaKey && !event.ctrlKey) return;
+      const mod = event.ctrlKey || event.metaKey;
+      if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
+      if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
+      if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
+      if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project save requested."); return; }
+      if (mod && event.key.toLowerCase() === "e") { event.preventDefault(); void exportVideo(); return; }
+      if (mod) return;
+      switch (event.key) {
+        case " ": event.preventDefault(); togglePlayback(); break;
+        case "s": case "S": event.preventDefault(); splitSelected(); break;
+        case "Delete": case "Backspace": event.preventDefault(); removeSelected(); break;
+        case "ArrowLeft": event.preventDefault(); setPlayhead(v => Math.max(0, v - (event.shiftKey ? 5 : 1))); break;
+        case "ArrowRight": event.preventDefault(); setPlayhead(v => Math.min(duration, v + (event.shiftKey ? 5 : 1))); break;
+        case "Home": event.preventDefault(); setPlayhead(0); break;
+        case "End": event.preventDefault(); setPlayhead(duration); break;
+        case "Escape": setPlaying(false); previewRef.current?.pause(); audioRef.current?.pause(); break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
 
   return <div className="app-shell">
     {isMobilePortrait && <div className="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
