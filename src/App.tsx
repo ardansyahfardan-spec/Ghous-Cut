@@ -6,7 +6,8 @@ import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
   Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Search, Clock3, ArrowLeft, Film as FilmIcon, Keyboard, Undo2, Redo2,
-  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX
+  Copy, ClipboardPaste, ClipboardX, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX,
+  Split, ArrowLeftToLine, ArrowRightToLine
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
@@ -706,6 +707,17 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               </div>
             </div>)}
             <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
+          </div>
+          <div className="mobile-edit-dock" aria-label="Editing tools">
+            <button className="mobile-tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={17}/><span>Split</span></button>
+            <button className="mobile-tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Split size={17}/><span>Split all</span></button>
+            <button className="mobile-tool-btn" onClick={cutSelected} title="Cut clips" aria-label="Cut clips"><ClipboardX size={17}/><span>Cut</span></button>
+            <button className="mobile-tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={17}/><span>Copy</span></button>
+            <button className="mobile-tool-btn" onClick={pasteClip} title="Paste clips" aria-label="Paste clips"><ClipboardPaste size={17}/><span>Paste</span></button>
+            <button className="mobile-tool-btn" onClick={duplicateSelected} title="Duplicate clip" aria-label="Duplicate clip"><CopyPlus size={17}/><span>Duplicate</span></button>
+            <button className="mobile-tool-btn" onClick={trimLeft} title="Trim start to playhead" aria-label="Trim start"><ArrowLeftToLine size={17}/><span>Trim in</span></button>
+            <button className="mobile-tool-btn" onClick={trimRight} title="Trim end to playhead" aria-label="Trim end"><ArrowRightToLine size={17}/><span>Trim out</span></button>
+            <button className="mobile-tool-btn danger-tool" onClick={removeSelected} title="Delete selected clips" aria-label="Delete selected clips"><Trash2 size={17}/><span>Delete</span></button>
           </div>
           <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · Ctrl+B split · Q/W trim · Del remove · Ctrl+Z undo</span><span>{selectedIds.length?selectedIds.length+" selected · ":""}{clips.length} clips · {fmt(duration)} workspace</span></div>
         </div>
