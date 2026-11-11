@@ -656,7 +656,7 @@ function GhostMark({ size = 28 }: { size?: number }) {
     <ellipse cx="24" cy="29" rx="3.2" ry="4.4" fill="#171321"/>
     <ellipse cx="40" cy="29" rx="3.2" ry="4.4" fill="#171321"/>
     <path d="M27 39c3.2 3.2 6.8 3.2 10 0" stroke="#171321" strokeWidth="2.8" strokeLinecap="round"/>
-    <path d="M32 2v4M7 19l4 2M57 19l-4 2" stroke="#D9B8FF" strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M32 2v4M7 19l4 2M57 19l-4 2" stroke="#C94B4B" strokeWidth="2.5" strokeLinecap="round"/>
   </svg>;
 }
 
