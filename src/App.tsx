@@ -111,7 +111,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 
   const active = clips.find(c => c.id === selected) || null;
   const selectedClips = useMemo(() => clips.filter(c => selectedIds.includes(c.id)), [clips, selectedIds]);
-  const selectClip = (clip: Clip, event?: React.MouseEvent) => {
+  const selectClip = (clip: Clip, event?: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }) => {
     if (event?.shiftKey && selectionAnchor.current) {
       const anchor=clips.find(c=>c.id===selectionAnchor.current);
       if(anchor && anchor.track===clip.track){
@@ -727,12 +727,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                     const handle=(e.target as HTMLElement).closest<HTMLElement>(".clip-trim-handle");
                     const mode=(handle?.dataset.trim as "trim-start"|"trim-end"|undefined) ?? "move";
                     const group=mode==="move" && selectedIds.includes(c.id)?clips.filter(item=>selectedIds.includes(item.id)):[c];
+                    if(mode!=="move" || !selectedIds.includes(c.id) || e.shiftKey || e.ctrlKey || e.metaKey) selectClip(c,e);
+                    setPlayhead(c.start);
                     touchDrag.current={id:c.id,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,originalStart:c.start,
                       originalDuration:c.duration,originalSourceIn:c.sourceIn,track:c.track,moved:false,mode,group};
                   }}
                   className={`timeline-clip ${c.kind} ${selectedIds.includes(c.id)?"selected":""}` }
-                  style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}
-                  onClick={e=>{if(suppressClipClick.current){suppressClipClick.current=false;return;}selectClip(c,e);setPlayhead(c.start);}}>
+                  style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}>
                   <span className="clip-trim-handle clip-trim-start" data-trim="trim-start" role="slider" aria-label="Trim clip start"/>
                   <span className="clip-thumb">{c.kind==="video"?<Film size={13}/>:c.kind==="image"?<ImageIcon size={13}/>:<AudioLines size={13}/>}</span><span className="clip-name">{c.name}</span><span className="clip-duration">{fmt(c.duration)}</span>
                   <span className="clip-trim-handle clip-trim-end" data-trim="trim-end" role="slider" aria-label="Trim clip end"/>
