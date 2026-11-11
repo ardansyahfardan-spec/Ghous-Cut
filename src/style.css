@@ -144,6 +144,7 @@ button:focus-visible{outline:2px solid #c18af0;outline-offset:2px}
 .project-thumbnail{position:relative;height:142px;display:grid;place-items:center;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#46305c,#21192c 55%,#13121b);color:#e5c9ff}
 .thumbnail-glow{position:absolute;width:180px;height:180px;border-radius:50%;background:#a75fe522;filter:blur(25px)}
 .project-thumbnail>svg{position:relative;filter:drop-shadow(0 8px 18px #0008)}
+.project-thumbnail>img,.project-thumbnail>video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#0b0b10}.project-thumbnail>img+ .thumbnail-play,.project-thumbnail>video+ .thumbnail-play{background:#100d18aa}
 .thumbnail-play{position:absolute;right:12px;bottom:12px;width:30px;height:30px;display:grid;place-items:center;border:1px solid #ffffff26;border-radius:8px;background:#100e18b8;color:#e8d8f8}
 .project-card-info{display:flex;flex-direction:column;gap:7px;padding:13px 13px 8px}.project-card-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.project-card-info span{display:flex;align-items:center;gap:6px;color:#8d8498;font-size:10px}
 .project-card-actions{display:flex;align-items:center;justify-content:space-between;padding:5px 10px 10px 13px;color:#857b90;font:9px 'DM Mono'}.project-card-actions button{width:29px;height:27px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#a79bad}.project-card-actions button:hover{background:#2b2335;color:#e9d6ff}
