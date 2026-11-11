@@ -14,9 +14,7 @@ function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) {
-        request.result.createObjectStore(STORE);
-      }
+      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -26,13 +24,33 @@ function openDb(): Promise<IDBDatabase> {
 export async function listProjects(): Promise<StoredProject[]> {
   const db = await openDb();
   const projects = await new Promise<StoredProject[]>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const request = tx.objectStore(STORE).getAll();
-    request.onsuccess = () => resolve((request.result as StoredProject[]).filter(p => p && typeof p.id === "string"));
-    request.onerror = () => reject(request.error);
+    const tx = db.transaction(STORE, "readwrite");
+    const store = tx.objectStore(STORE);
+    const allRequest = store.getAll();
+    const legacyRequest = store.get(LEGACY_KEY);
+    let all: StoredProject[] = [];
+    let legacy: { clips?: unknown[]; updatedAt?: number } | undefined;
+    allRequest.onsuccess = () => { all = (allRequest.result as StoredProject[]).filter(p => p && typeof p.id === "string"); };
+    legacyRequest.onsuccess = () => { legacy = legacyRequest.result as typeof legacy; };
+    tx.oncomplete = () => {
+      if (legacy?.clips?.length) {
+        const now = legacy.updatedAt || Date.now();
+        const recovered: StoredProject = { id: "recovered-" + now, name: "Proyek Sebelumnya", clips: legacy.clips, createdAt: now, updatedAt: now };
+        if (!all.some(p => p.id === recovered.id)) {
+          const write = db.transaction(STORE, "readwrite");
+          write.objectStore(STORE).put(recovered, recovered.id);
+          write.oncomplete = () => resolve([...all, recovered].sort((a,b) => b.updatedAt-a.updatedAt));
+          write.onerror = () => reject(write.error);
+          return;
+        }
+      }
+      resolve(all.sort((a,b) => b.updatedAt-a.updatedAt));
+    };
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
   db.close();
-  return projects.sort((a, b) => b.updatedAt - a.updatedAt);
+  return projects;
 }
 
 export async function loadProject<T>(id: string): Promise<StoredProject<T> | null> {
@@ -54,11 +72,7 @@ export async function saveProject<T>(id: string, name: string, clips: T[]): Prom
     const request = store.get(id);
     request.onsuccess = () => {
       const current = request.result as StoredProject<T> | undefined;
-      store.put({
-        id, name, clips,
-        createdAt: current?.createdAt ?? Date.now(),
-        updatedAt: Date.now()
-      } satisfies StoredProject<T>, id);
+      store.put({ id, name, clips, createdAt: current?.createdAt ?? Date.now(), updatedAt: Date.now() } satisfies StoredProject<T>, id);
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
