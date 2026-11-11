@@ -5,7 +5,7 @@ import { loadLocalProject, saveLocalProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
-  Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X
+  Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Smartphone, RotateCw
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
@@ -42,10 +42,39 @@ export default function App() {
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
   const [projectReady, setProjectReady] = useState(false);
+  const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const previewRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = "__TAURI_INTERNALS__" in window;
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 900px) and (orientation: portrait)");
+    const update = () => setIsMobilePortrait(media.matches);
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  const requestLandscape = async () => {
+    const root = document.documentElement as HTMLElement & { requestFullscreen?: () => Promise<void> };
+    try {
+      if (!document.fullscreenElement && root.requestFullscreen) await root.requestFullscreen();
+    } catch {
+      // Fullscreen is optional; continue to attempt orientation lock.
+    }
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (value: "landscape") => Promise<void> };
+    if (!orientation.lock) {
+      setNotice("Browser ini belum mendukung penguncian otomatis. Putar HP ke posisi landscape untuk melanjutkan.");
+      return;
+    }
+    try {
+      await orientation.lock("landscape");
+      setNotice("Mode landscape diaktifkan.");
+    } catch {
+      setNotice("Browser menolak penguncian otomatis. Silakan putar HP ke posisi landscape.");
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -200,6 +229,16 @@ export default function App() {
   const trackEnd = (track: number) => clips.filter(c => c.track === track).reduce((m,c) => Math.max(m,c.start+c.duration), 0);
 
   return <div className="app-shell">
+    {isMobilePortrait && <div className="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
+      <div className="orientation-card">
+        <div className="orientation-icon"><Smartphone size={38}/><RotateCw size={22}/></div>
+        <span className="eyebrow">GHOUS CUT · MOBILE EDITOR</span>
+        <h1 id="orientation-title">Putar perangkat Anda</h1>
+        <p>Ghous Cut menggunakan workspace landscape agar timeline, preview, dan panel editing lebih nyaman digunakan.</p>
+        <button className="btn primary orientation-action" onClick={requestLandscape}><RotateCw size={16}/> Aktifkan landscape</button>
+        <small>Jika layar tidak berputar otomatis, matikan kunci rotasi HP lalu putar perangkat ke samping.</small>
+      </div>
+    </div>}
     <header className="topbar">
       <div className="brand"><div className="brand-mark"><Clapperboard size={19}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> Untitled Project <ChevronDown size={14}/></div>
