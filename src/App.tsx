@@ -439,7 +439,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             </div>)}
             <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
           </div>
-          <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag clips to arrange · Click ruler to move playhead</span><span>{clips.length} clips · {fmt(duration)} workspace</span></div>
+          <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · S split · Del remove · Ctrl+Z undo</span><span>{clips.length} clips · {fmt(duration)} workspace</span></div>
         </div>
       </section>
 
