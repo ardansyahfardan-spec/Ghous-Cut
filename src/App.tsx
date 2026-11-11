@@ -6,7 +6,7 @@ import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
   Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Search, Clock3, ArrowLeft, Film as FilmIcon, Keyboard, Undo2, Redo2,
-  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp
+  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX, Volume2
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
@@ -568,7 +568,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             {!activeVisualClips.length && activeAudioClips.length > 0 && <div className="audio-preview"><div className="audio-art"><AudioLines size={52}/></div><strong>{activeAudioClips.length === 1 ? activeAudioClips[0].name : `${activeAudioClips.length} audio tracks`}</strong><span>Audio preview</span></div>}
           </div>
           <div className="transport">
-            <span className="timecode">{fmt(playhead)}</span><div className="transport-controls"><button className="transport-btn" onClick={() => setPlayhead(0)} title="Go to start">|◀</button><button className="play-btn" onClick={togglePlayback}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button className="transport-btn" onClick={() => setPlayhead(Math.min(duration,playhead+5))} title="Forward 5 seconds">▶|</button></div><span className="timecode muted">{fmt(duration)}</span>
+            <span className="timecode">{fmt(playhead)}</span><div className="transport-controls"><button className="transport-btn" onClick={() => setPlayhead(0)} title="Go to start" aria-label="Go to start"><SkipBack size={16}/></button><button className="play-btn" onClick={togglePlayback}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button className="transport-btn" onClick={() => setPlayhead(Math.min(duration,playhead+5))} title="Forward 5 seconds" aria-label="Forward 5 seconds"><SkipForward size={16}/></button></div><span className="timecode muted">{fmt(duration)}</span>
           </div>
         </div>
 
@@ -586,7 +586,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               <button className="tool-btn" onClick={trimRight} title="Trim end to playhead" aria-label="Trim end"><Scissors size={16}/><span>Trim R</span></button>
               <button className="tool-btn danger-tool" onClick={removeSelected} title="Delete selected clips" aria-label="Delete selected clips"><Trash2 size={16}/>{selectedIds.length>1&&<span>{selectedIds.length}</span>}</button>
             </div>
-            <div className="zoom-control"><button type="button" className="zoom-step" aria-label="Zoom out timeline" onClick={()=>setZoom(v=>Math.max(0.6,Math.round((v-0.1)*10)/10))}>−</button><input aria-label="Timeline zoom" type="range" min="0.6" max="1.8" step="0.1" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/><button type="button" className="zoom-step" aria-label="Zoom in timeline" onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+0.1)*10)/10))}>+</button><button type="button" className="zoom-reset" onClick={()=>setZoom(1)} title="Reset zoom">100%</button></div>
+            <div className="zoom-control"><button type="button" className="zoom-step" aria-label="Zoom out timeline" onClick={()=>setZoom(v=>Math.max(0.6,Math.round((v-0.1)*10)/10))}><Minus size={13}/></button><input aria-label="Timeline zoom" type="range" min="0.6" max="1.8" step="0.1" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/><button type="button" className="zoom-step" aria-label="Zoom in timeline" onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+0.1)*10)/10))}><Plus size={13}/></button><button type="button" className="zoom-reset" onClick={()=>setZoom(1)} title="Reset zoom">100%</button></div>
           </div>
           <div className="timeline-scroll" onWheel={e=>{
             if(!e.ctrlKey) return;
@@ -672,7 +672,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               </div>
             </div>
             {TRACKS.map(t => <div className="track-row" key={t.id}>
-              <div className="track-label"><t.icon size={15}/><div><strong>{t.name}</strong><small>{t.hint}</small></div><button type="button" className={`track-mute ${mutedTracks.includes(t.id)?"muted":""}`} title={mutedTracks.includes(t.id)?"Unmute track":"Mute track"} aria-label={mutedTracks.includes(t.id)?"Unmute "+t.name:"Mute "+t.name} onClick={e=>{e.stopPropagation();setMutedTracks(old=>old.includes(t.id)?old.filter(id=>id!==t.id):[...old,t.id]);}}>{mutedTracks.includes(t.id)?"M":"M"}</button></div>
+              <div className="track-label"><t.icon size={15}/><div><strong>{t.name}</strong><small>{t.hint}</small></div><button type="button" className={`track-mute ${mutedTracks.includes(t.id)?"muted":""}`} title={mutedTracks.includes(t.id)?"Unmute track":"Mute track"} aria-label={mutedTracks.includes(t.id)?"Unmute "+t.name:"Mute "+t.name} onClick={e=>{e.stopPropagation();setMutedTracks(old=>old.includes(t.id)?old.filter(id=>id!==t.id):[...old,t.id]);}}>{mutedTracks.includes(t.id)?<VolumeX size={12}/>:<Volume2 size={12}/>}</button></div>
               <div className="track-lane" data-track={t.id} style={{width:Math.max(800,duration*scale),backgroundSize:scale+"px 100%"}} onClick={e=>{
                 if(e.target===e.currentTarget){
                   const r=e.currentTarget.getBoundingClientRect();
@@ -940,7 +940,7 @@ export default function App() {
             <div className="project-thumbnail"><div className="thumbnail-glow"/>{project.clips.find(clip => clip.kind === "image" && clip.src)?.src ? <img src={project.clips.find(clip => clip.kind === "image" && clip.src)?.src} alt="" loading="lazy"/> : project.clips.find(clip => clip.kind === "video" && clip.src)?.src ? <video src={project.clips.find(clip => clip.kind === "video" && clip.src)?.src} muted playsInline preload="metadata"/> : <BrandLogo size={64}/>}<span className="thumbnail-play"><FilmIcon size={17}/></span></div>
             <div className="project-card-info"><strong>{project.name}</strong><span><Clock3 size={12}/> {formatDate(project.updatedAt)}</span></div>
           </button>
-          <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void renameProject(project)} title="Ubah nama proyek" aria-label={`Ubah nama ${project.name}`}>✎</button><button onClick={() => void duplicateProject(project)} title="Duplikat proyek" aria-label={`Duplikat ${project.name}`}>⧉</button><button onClick={() => void removeProject(project)} title="Hapus proyek" aria-label={`Hapus ${project.name}`}><Trash2 size={15}/></button></div>
+          <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void renameProject(project)} title="Ubah nama proyek" aria-label={`Ubah nama ${project.name}`}><Pencil size={15}/></button><button onClick={() => void duplicateProject(project)} title="Duplikat proyek" aria-label={`Duplikat ${project.name}`}><CopyPlus size={15}/></button><button onClick={() => void removeProject(project)} title="Hapus proyek" aria-label={`Hapus ${project.name}`}><Trash2 size={15}/></button></div>
         </article>)}
       </div>}
     </section>
