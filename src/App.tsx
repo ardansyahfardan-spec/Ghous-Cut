@@ -49,7 +49,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
-  const touchDrag = useRef<{ id: string; startX: number; originalStart: number; track: number; moved: boolean } | null>(null);
+  const touchDrag = useRef<{ id: string; startX: number; originalStart: number; track: number; moved: boolean; group: Clip[] } | null>(null);
+  const suppressClipClick = useRef(false);
   const scrubbing = useRef(false);
   const [projectReady, setProjectReady] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
@@ -661,7 +662,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                   onPointerDown={e=>{
                     if(e.pointerType!=="touch" && e.pointerType!=="pen") return;
                     e.currentTarget.setPointerCapture(e.pointerId);
-                    touchDrag.current={id:c.id,startX:e.clientX,originalStart:c.start,track:c.track,moved:false};
+                    const group=selectedIds.includes(c.id)?clips.filter(item=>selectedIds.includes(item.id)):[c];
+                    touchDrag.current={id:c.id,startX:e.clientX,originalStart:c.start,track:c.track,moved:false,group};
                   }}
                   onPointerMove={e=>{
                     const drag=touchDrag.current;
@@ -669,19 +671,23 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                     const lane=document.elementFromPoint(e.clientX,e.clientY)?.closest<HTMLElement>(".track-lane");
                     const nextTrack=Number(lane?.dataset.track ?? drag.track);
                     const rawStart=Math.max(0,drag.originalStart+(e.clientX-drag.startX)/scale);
-                    const nextStart=snapTime(c.id,rawStart);
+                    const nextStart=snapTime(c.id,rawStart),trackDelta=nextTrack-drag.track;
+                    const groupIds=new Set(drag.group.map(item=>item.id));
                     if(!drag.moved){undoStack.current.push(clips);if(undoStack.current.length>100)undoStack.current.shift();redoStack.current=[];drag.moved=true;}
-                    setClips(old=>old.map(item=>item.id===c.id?{...item,start:nextStart,track:nextTrack}:item));
+                    setClips(old=>old.map(item=>groupIds.has(item.id)?{...item,start:Math.max(0,nextStart+(item.start-drag.originalStart)),track:Math.max(0,Math.min(2,item.track+trackDelta))}:item));
                   }}
                   onPointerUp={e=>{
                     const drag=touchDrag.current;
-                    if(drag?.id===c.id && drag.moved) setNotice("Clip moved on timeline.");
+                    if(drag?.id===c.id && drag.moved){
+                      setNotice(drag.group.length+" klip dipindahkan bersama.");
+                      setSelectedIds(drag.group.map(item=>item.id));setSelected(c.id);suppressClipClick.current=true;
+                    }
                     touchDrag.current=null;
                   }}
                   onPointerCancel={()=>{touchDrag.current=null;}}
                   className={`timeline-clip ${c.kind} ${selectedIds.includes(c.id)?"selected":""}`}
                   style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}
-                  onClick={e=>{selectClip(c,e);setPlayhead(c.start);}}>
+                  onClick={e=>{if(suppressClipClick.current){suppressClipClick.current=false;return;}selectClip(c,e);setPlayhead(c.start);}}>
                   <span className="clip-thumb">{c.kind==="video"?<Film size={13}/>:c.kind==="image"?<ImageIcon size={13}/>:<AudioLines size={13}/>}</span><span className="clip-name">{c.name}</span><span className="clip-duration">{fmt(c.duration)}</span>
                 </div>)}
               </div>
