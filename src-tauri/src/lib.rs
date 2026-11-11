@@ -1,4 +1,69 @@
-use std::process::Command;
+use std::{fs, path::PathBuf, process::Command};
+use serde_json::Value;
+use tauri::{AppHandle, Manager};
+
+fn projects_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
+    directory.push("projects");
+    fs::create_dir_all(&directory).map_err(|e| format!("Cannot create local projects folder: {e}"))?;
+    Ok(directory)
+}
+
+fn valid_project_id(id: &str) -> bool {
+    !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+#[tauri::command]
+fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
+    let directory = projects_directory(&app)?;
+    let mut projects = Vec::new();
+    for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.path().extension().and_then(|v| v.to_str()) != Some("json") { continue; }
+        let content = fs::read_to_string(entry.path()).map_err(|e| e.to_string())?;
+        if let Ok(project) = serde_json::from_str::<Value>(&content) { projects.push(project); }
+    }
+    Ok(projects)
+}
+
+#[tauri::command]
+fn load_project(app: AppHandle, id: String) -> Result<Option<Value>, String> {
+    if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
+    let mut path = projects_directory(&app)?;
+    path.push(format!("{id}.json"));
+    if !path.exists() { return Ok(None); }
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&content).map(Some).map_err(|e| format!("Invalid local project file: {e}"))
+}
+
+#[tauri::command]
+fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
+    let id = project.get("id").and_then(Value::as_str).ok_or("Project ID is missing.")?;
+    if !valid_project_id(id) { return Err("Invalid project ID.".into()); }
+    let mut path = projects_directory(&app)?;
+    path.push(format!("{id}.json"));
+    let mut temporary = path.clone();
+    temporary.set_extension("json.tmp");
+    let content = serde_json::to_vec_pretty(&project).map_err(|e| e.to_string())?;
+    fs::write(&temporary, content).map_err(|e| format!("Cannot write local project: {e}"))?;
+    fs::rename(&temporary, &path).map_err(|e| format!("Cannot finalize local project: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_project(app: AppHandle, id: String) -> Result<(), String> {
+    if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
+    let mut path = projects_directory(&app)?;
+    path.push(format!("{id}.json"));
+    if path.exists() { fs::remove_file(path).map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
+#[tauri::command]
+fn write_project_file(path: String, content: String) -> Result<(), String> {
+    if path.trim().is_empty() { return Err("Project export path is required.".into()); }
+    fs::write(path, content).map_err(|e| format!("Cannot export project file: {e}"))
+}
 
 #[tauri::command]
 fn export_clip(
@@ -56,7 +121,9 @@ fn export_clip(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![export_clip])
+        .invoke_handler(tauri::generate_handler![
+            export_clip, list_projects, load_project, save_project, delete_project, write_project_file
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
 }
