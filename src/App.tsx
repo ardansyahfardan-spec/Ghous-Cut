@@ -11,7 +11,7 @@ import {
 type MediaKind = "video" | "image" | "audio";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
-  track: number; start: number; sourceIn: number; duration: number; file?: File;
+  track: number; start: number; sourceIn: number; duration: number; volume?: number; file?: File;
 };
 const SCALE = 54;
 const TRACKS = [
@@ -81,6 +81,11 @@ export default function App() {
   }, [playing]);
 
   useEffect(() => {
+    if (previewRef.current) previewRef.current.volume = Math.max(0, Math.min(1, active?.volume ?? 1));
+    if (audioRef.current) audioRef.current.volume = Math.max(0, Math.min(1, active?.volume ?? 1));
+  }, [active?.id, active?.volume]);
+
+  useEffect(() => {
     const el = previewRef.current;
     if (!el || !active || active.kind !== "video") return;
     const target = Math.max(0, active.sourceIn + playhead - active.start);
@@ -99,7 +104,7 @@ export default function App() {
       return {
         id: crypto.randomUUID(), name: basename(path), path,
         src: isDesktop ? convertFileSrc(path) : path,
-        kind, track, start: last + (i ? 0.25 * i : 0), sourceIn: 0, duration: kind === "image" ? 5 : 10
+        kind, track, start: last + (i ? 0.25 * i : 0), sourceIn: 0, duration: kind === "image" ? 5 : 10, volume: 1
       };
     });
     setClips(old => [...old, ...newClips]);
@@ -170,7 +175,7 @@ export default function App() {
       setExporting(true);
       setNotice("Rendering selected clip with FFmpeg…");
       const result = await invoke<string>("export_clip", {
-        input: active.path, output, start: active.sourceIn, duration: active.duration, denoise
+        input: active.path, output, start: active.sourceIn, duration: active.duration, denoise, volume: active.volume ?? 1
       });
       setNotice(result);
     } catch (e) {
@@ -279,7 +284,7 @@ export default function App() {
         {active ? <div className="inspector-content">
           <div className="selected-file"><div className={`selected-file-icon ${active.kind}`}>{active.kind==="video"?<Video/>:active.kind==="image"?<ImageIcon/>:<Music2/>}</div><strong>{active.name}</strong><small>{active.kind.toUpperCase()} CLIP</small></div>
           <div className="property-group"><label>POSITION ON TIMELINE</label><div className="property-input"><span>Start</span><strong>{fmt(active.start)}</strong></div><div className="property-input"><span>Duration</span><strong>{fmt(active.duration)}</strong></div><div className="property-input"><span>Track</span><strong>{TRACKS.find(t=>t.id===active.track)?.name}</strong></div></div>
-          <div className="property-group"><label>TRIM RANGE</label><div className="property-input"><span>Source in</span><strong>{fmt(active.sourceIn)}</strong></div><div className="property-input"><span>Source out</span><strong>{fmt(active.sourceIn+active.duration)}</strong></div><p className="helper-text">Use the trim buttons above the timeline at the playhead position.</p></div>
+          <div className="property-group"><label>AUDIO LEVEL</label><div className="property-input"><span>Clip volume</span><strong>{Math.round((active.volume ?? 1) * 100)}%</strong></div><input aria-label="Clip volume" type="range" min="0" max="1" step="0.01" value={active.volume ?? 1} onChange={e=>updateClip(active.id,{volume:Number(e.target.value)})} style={{width:"100%"}}/><button className="wide-action" onClick={()=>updateClip(active.id,{volume:0})}>Mute clip</button><button className="wide-action" onClick={()=>updateClip(active.id,{volume:1})}>Reset volume</button></div><div className="property-group"><label>TRIM RANGE</label><div className="property-input"><span>Source in</span><strong>{fmt(active.sourceIn)}</strong></div><div className="property-input"><span>Source out</span><strong>{fmt(active.sourceIn+active.duration)}</strong></div><p className="helper-text">Use the trim buttons above the timeline at the playhead position.</p></div>
           <div className="property-group"><label>QUICK ACTIONS</label><button className="wide-action" onClick={()=>{setPlayhead(active.start);setNotice("Playhead moved to clip start.");}}>Go to clip start</button><button className="wide-action" onClick={()=>{setPlayhead(active.start+active.duration);setNotice("Playhead moved to clip end.");}}>Go to clip end</button></div>
         </div> : <div className="inspector-empty"><MousePointer2 size={24}/><strong>Nothing selected</strong><span>Select a clip to inspect its properties</span></div>}
         <div className="ai-card"><div className="ai-card-title"><Sparkles size={15}/><strong>Audio enhancement</strong><span className="beta-pill">BETA</span></div><p>Reduce steady background noise in your exported video using FFmpeg denoising.</p><label className="toggle-row"><span><Volume2 size={15}/> Noise reduction</span><input type="checkbox" checked={denoise} onChange={e=>setDenoise(e.target.checked)}/><i/></label></div>
@@ -289,7 +294,7 @@ export default function App() {
     <input ref={fileInputRef} type="file" multiple accept="video/*,audio/*,image/*" hidden onChange={e=>{
       const files=Array.from(e.target.files||[]);
       const urls=files.map(f=>URL.createObjectURL(f));
-      const newClips=files.map((f,i)=>({id:crypto.randomUUID(),name:f.name,path:f.name,src:urls[i],file:f,kind:kindFrom(f.name),track:kindFrom(f.name)==="audio"?2:kindFrom(f.name)==="image"?1:0,start:0,sourceIn:0,duration:10} as Clip));
+      const newClips=files.map((f,i)=>({id:crypto.randomUUID(),name:f.name,path:f.name,src:urls[i],file:f,kind:kindFrom(f.name),track:kindFrom(f.name)==="audio"?2:kindFrom(f.name)==="image"?1:0,start:0,sourceIn:0,duration:10,volume:1} as Clip));
       setClips(old=>[...old,...newClips]);if(newClips[0])setSelected(newClips[0].id);setNotice("Browser preview mode. Run the Windows app for FFmpeg export.");
       e.currentTarget.value="";
     }}/>
