@@ -271,7 +271,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         duration: c.duration - leftDuration
       };
     });
-    const rightById = new Map(targets.map((c, i) => [c.id, rightClips[i]]));
+    const rightById = new Map<string, Clip>(targets.map((c, i) => [c.id, rightClips[i]] as const));
     updateTimeline(old => old.flatMap(c => {
       const right = rightById.get(c.id);
       return right ? [{ ...c, duration: playhead - c.start }, right] : [c];
