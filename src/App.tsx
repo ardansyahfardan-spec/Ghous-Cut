@@ -760,7 +760,7 @@ export default function App() {
       </div> : <div className="project-grid">
         {visibleProjects.map(project => <article className="project-card" key={project.id}>
           <button className="project-open" onClick={() => void openProject(project)} aria-label={`Buka ${project.name}`}>
-            <div className="project-thumbnail"><div className="thumbnail-glow"/><GhostMark size={42}/><span className="thumbnail-play"><FilmIcon size={17}/></span></div>
+            <div className="project-thumbnail"><div className="thumbnail-glow"/>{project.clips.find(clip => clip.kind === "image" && clip.src)?.src ? <img src={project.clips.find(clip => clip.kind === "image" && clip.src)?.src} alt="" loading="lazy"/> : project.clips.find(clip => clip.kind === "video" && clip.src)?.src ? <video src={project.clips.find(clip => clip.kind === "video" && clip.src)?.src} muted playsInline preload="metadata"/> : <GhostMark size={42}/>}<span className="thumbnail-play"><FilmIcon size={17}/></span></div>
             <div className="project-card-info"><strong>{project.name}</strong><span><Clock3 size={12}/> {formatDate(project.updatedAt)}</span></div>
           </button>
           <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void renameProject(project)} title="Ubah nama proyek" aria-label={`Ubah nama ${project.name}`}>✎</button><button onClick={() => void duplicateProject(project)} title="Duplikat proyek" aria-label={`Duplikat ${project.name}`}>⧉</button><button onClick={() => void removeProject(project)} title="Hapus proyek" aria-label={`Hapus ${project.name}`}><Trash2 size={15}/></button></div>
