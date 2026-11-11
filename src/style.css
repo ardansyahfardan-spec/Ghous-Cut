@@ -929,7 +929,13 @@ body.library-page #root {
   .tool-btn { flex-basis: 34px; width: 34px; min-width: 34px; }
 }
 @media (max-height: 560px) and (max-width: 760px) and (orientation: landscape) {
-  .center-panel { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .preview-panel, .timeline-panel { min-height: 0; }
+  /* On short phones, make the preview and timeline true side-by-side grid items. */
+  .center-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .preview-panel, .timeline-panel { min-height: 0; max-height: none; height: auto; }
   .timeline-toolbar { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "title zoom" "tools tools"; }
 }
