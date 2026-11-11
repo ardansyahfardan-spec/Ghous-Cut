@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+
 export type StoredProject<T = any> = {
   id: string;
   name: string;
@@ -7,101 +10,112 @@ export type StoredProject<T = any> = {
   aspectRatio?: "16:9" | "9:16" | "1:1";
 };
 
-const DB_NAME = "ghous-cut-local";
-const STORE = "projects";
-const LEGACY_KEY = "autosave";
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
+const browserProjects = new Map<string, StoredProject>();
+const isDesktop = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const sortRecent = (projects: StoredProject[]) => projects.sort((a, b) => b.updatedAt - a.updatedAt);
 
 export async function listProjects(): Promise<StoredProject[]> {
-  const db = await openDb();
-  const projects = await new Promise<StoredProject[]>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    const allRequest = store.getAll();
-    const legacyRequest = store.get(LEGACY_KEY);
-    let all: StoredProject[] = [];
-    let legacy: { clips?: unknown[]; updatedAt?: number } | undefined;
-    allRequest.onsuccess = () => { all = (allRequest.result as StoredProject[]).filter(p => p && typeof p.id === "string"); };
-    legacyRequest.onsuccess = () => { legacy = legacyRequest.result as typeof legacy; };
-    tx.oncomplete = () => {
-      if (legacy?.clips?.length) {
-        const now = legacy.updatedAt || Date.now();
-        const recovered: StoredProject = { id: "recovered-" + now, name: "Proyek Sebelumnya", clips: legacy.clips, createdAt: now, updatedAt: now };
-        if (!all.some(p => p.id === recovered.id)) {
-          const write = db.transaction(STORE, "readwrite");
-          write.objectStore(STORE).put(recovered, recovered.id);
-          write.oncomplete = () => resolve([...all, recovered].sort((a,b) => b.updatedAt-a.updatedAt));
-          write.onerror = () => reject(write.error);
-          return;
-        }
-      }
-      resolve(all.sort((a,b) => b.updatedAt-a.updatedAt));
-    };
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-  db.close();
-  return projects;
+  if (isDesktop()) return sortRecent(await invoke<StoredProject[]>("list_projects"));
+  return sortRecent(Array.from(browserProjects.values()));
 }
 
 export async function loadProject<T>(id: string): Promise<StoredProject<T> | null> {
-  const db = await openDb();
-  const value = await new Promise<StoredProject<T> | undefined>((resolve, reject) => {
-    const request = db.transaction(STORE, "readonly").objectStore(STORE).get(id);
-    request.onsuccess = () => resolve(request.result as StoredProject<T> | undefined);
-    request.onerror = () => reject(request.error);
-  });
-  db.close();
-  return value ?? null;
+  if (isDesktop()) return await invoke<StoredProject<T> | null>("load_project", { id });
+  return (browserProjects.get(id) as StoredProject<T> | undefined) ?? null;
 }
 
 export async function saveProject<T>(id: string, name: string, clips: T[]): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    const store = tx.objectStore(STORE);
-    const request = store.get(id);
-    request.onsuccess = () => {
-      const current = request.result as StoredProject<T> | undefined;
-      store.put({ ...current, id, name, clips, createdAt: current?.createdAt ?? Date.now(), updatedAt: Date.now() } satisfies StoredProject<T>, id);
-    };
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-  db.close();
+  const current = await loadProject<T>(id);
+  const project: StoredProject<T> = {
+    ...current,
+    id,
+    name,
+    clips,
+    createdAt: current?.createdAt ?? Date.now(),
+    updatedAt: Date.now()
+  };
+  if (isDesktop()) {
+    await invoke("save_project", { project });
+  } else {
+    browserProjects.set(id, project);
+  }
 }
 
 export async function createProject<T>(project: StoredProject<T>): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(project, project.id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-  db.close();
+  if (isDesktop()) {
+    await invoke("save_project", { project });
+  } else {
+    browserProjects.set(project.id, project);
+  }
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-  db.close();
+  if (isDesktop()) {
+    await invoke("delete_project", { id });
+  } else {
+    browserProjects.delete(id);
+  }
+}
+
+export async function exportProjectFile<T>(project: StoredProject<T>): Promise<boolean> {
+  const portable = {
+    format: "ghous-cut-project",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    project: {
+      ...project,
+      clips: project.clips.map(clip => {
+        const item = clip as T & { src?: string; file?: File };
+        return { ...item, src: "", file: undefined };
+      })
+    }
+  };
+  const content = JSON.stringify(portable, null, 2);
+  const safeName = project.name.replace(/[\\/:*?"<>|]/g, "-").trim() || "Ghous-Cut-Project";
+
+  if (isDesktop()) {
+    const path = await saveDialog({
+      defaultPath: `${safeName}.ghcut`,
+      filters: [{ name: "Ghous Cut Project", extensions: ["ghcut"] }]
+    });
+    if (!path) return false;
+    await invoke("write_project_file", { path, content });
+    return true;
+  }
+
+  const blob = new Blob([content], { type: "application/vnd.ghouscut.project+json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${safeName}.ghcut`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+export async function importProjectFile(file: File): Promise<StoredProject> {
+  const parsed = JSON.parse(await file.text()) as {
+    format?: string;
+    version?: number;
+    project?: StoredProject;
+  };
+  if (parsed.format !== "ghous-cut-project" || parsed.version !== 1 || !parsed.project ||
+      typeof parsed.project.name !== "string" || !Array.isArray(parsed.project.clips)) {
+    throw new Error("File bukan proyek Ghous Cut yang valid.");
+  }
+
+  const now = Date.now();
+  const project: StoredProject = {
+    ...parsed.project,
+    id: crypto.randomUUID(),
+    name: parsed.project.name,
+    clips: parsed.project.clips.map(clip => {
+      const item = clip as { src?: string; file?: unknown };
+      return { ...item, src: "", file: undefined };
+    }),
+    createdAt: now,
+    updatedAt: now
+  };
+  await createProject(project);
+  return project;
 }
