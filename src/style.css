@@ -366,3 +366,46 @@ kbd { background: #292a23; border-color: #625a47; color: var(--gc-cream-strong);
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+
+/* Brand correction: remove the leftover purple identity and restore a clear red accent. */
+:root {
+  --gc-red: #c94b4b;
+  --gc-red-deep: #8f3035;
+  --gc-red-soft: #e07870;
+}
+.brand-logo-image { display:block; width:100%; height:100%; object-fit:contain; }
+.brand-mark { background:var(--gc-cream); color:var(--gc-cream-ink); border:1px solid #8f3035; }
+.brand-mark .brand-logo-image { width:22px; height:22px; }
+.back-home { color:var(--gc-red-soft); border-color:#563235; }
+.back-home:hover { background:#2a1919; border-color:var(--gc-red); }
+.btn.primary { background:var(--gc-red); border:1px solid var(--gc-red); color:#fff7ef; box-shadow:none; }
+.btn.primary:hover { background:#b94043; border-color:#b94043; }
+.brand-accent, .library-brand b { color:var(--gc-red-soft); }
+.version { color:#e08a83; border-color:#754044; }
+.splash-screen { background:#10100f; }
+.splash-glow { background:radial-gradient(ellipse, #c94b4b24 0%, #8f303510 48%, transparent 72%); }
+.splash-brand-mark {
+  width:132px; height:132px; border:1px solid #9a4b48; border-radius:30px;
+  background:var(--gc-cream); color:#171813;
+  box-shadow:0 14px 48px #c94b4b24;
+}
+.splash-brand-mark .brand-logo-image { width:94px; height:94px; object-fit:contain; }
+.splash-title span { color:var(--gc-red-soft); }
+.splash-loading { background:#3a2927; }
+.splash-loading i { background:var(--gc-red); }
+.splash-subtitle { color:#d6b9a9; }
+.splash-caption { color:#aaa596; }
+.library-mark {
+  background:var(--gc-cream); color:#171813; border:1px solid #9a4b48;
+}
+.library-mark .brand-logo-image { width:32px; height:32px; object-fit:contain; }
+.library-kicker { color:var(--gc-red-soft); }
+.new-project-button { background:var(--gc-red); border-color:var(--gc-red); color:#fff7ef; }
+.new-project-button.secondary { background:#29211f; border-color:#714744; color:#efc8bc; }
+.project-card:hover { border-color:#8f4b48; }
+.empty-ghost { border-color:#754044; color:var(--gc-red-soft); }
+.library-empty { border-color:#754044; }
+.orientation-icon { color:var(--gc-red-soft); }
+.orientation-action { background:var(--gc-red); color:#fff7ef; }
+button:focus-visible { outline-color:var(--gc-red-soft); }
