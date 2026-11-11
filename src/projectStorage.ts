@@ -158,7 +158,9 @@ export async function importProjectFile(file: File): Promise<StoredProject> {
       const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
       if (mediaBytes) {
         const extension = item.name?.split(".").pop()?.toLowerCase() || "bin";
-        const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);\n        new Uint8Array(mediaBuffer).set(mediaBytes);\n        const mediaFile = new File([mediaBuffer], item.name || `media.${extension}`);
+        const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);
+        new Uint8Array(mediaBuffer).set(mediaBytes);
+        const mediaFile = new File([mediaBuffer], item.name || `media.${extension}`);
         return { ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined };
       }
       return { ...item, src: "", file: undefined };
