@@ -108,3 +108,53 @@ button:focus-visible{outline:2px solid #c18af0;outline-offset:2px}
   .tool-btn{min-height:27px}
   .tool-btn svg,.transport-btn svg{width:13px;height:13px}
 }
+
+
+/* Ghous Cut identity, splash and CapCut-inspired project library */
+.back-home{width:29px;height:29px;display:grid;place-items:center;border:1px solid #343746;border-radius:7px;background:#191b26;color:#c9a8e9}
+.back-home:hover{background:#292238;border-color:#9b70c4}
+.brand-mark{background:linear-gradient(145deg,#9b5de5,#6f42c1);color:#fff}
+.splash-screen{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;background:#09080f;color:#fff}
+.splash-glow{position:absolute;width:min(70vw,620px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#6e3aa544 0%,#37204a22 45%,transparent 70%);filter:blur(12px)}
+.splash-brand-mark{position:relative;width:132px;height:132px;display:grid;place-items:center;border:1px solid #704c91;border-radius:36px;background:linear-gradient(145deg,#30203e,#17131f);color:#f1dcff;box-shadow:0 18px 80px #a45be633,inset 0 1px #ffffff18;animation:ghost-float 2.6s ease-in-out infinite}
+.splash-title{position:relative;margin-top:25px;font-size:31px;font-weight:900;letter-spacing:3px}.splash-title span{color:#c38aff}
+.splash-subtitle{position:relative;margin-top:7px;color:#a59ab4;font:10px 'DM Mono';letter-spacing:4px}
+.splash-loading{position:relative;width:180px;height:3px;margin-top:34px;border-radius:9px;background:#30283a;overflow:hidden}.splash-loading i{display:block;width:38%;height:100%;border-radius:9px;background:linear-gradient(90deg,#8c4bd2,#d5a1ff);animation:splash-progress 1.25s ease-in-out infinite}
+.splash-caption{position:relative;margin-top:12px;color:#756b82;font-size:10px;letter-spacing:.4px}
+@keyframes splash-progress{0%{transform:translateX(-110%)}100%{transform:translateX(370%)}}
+@keyframes ghost-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.project-library{min-height:100vh;background:radial-gradient(ellipse at 50% -35%,#292039 0%,#111019 45%,#0a0b11 100%);color:#f1edf7}
+.library-topbar{height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 clamp(18px,5vw,72px);border-bottom:1px solid #292432;background:#0e0d15}
+.library-brand{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:900;letter-spacing:1px}.library-brand b{color:#c58aff}
+.library-brand small{margin-left:5px;padding-left:14px;border-left:1px solid #383044;color:#847b91;font:9px 'DM Mono';letter-spacing:1.5px}
+.library-mark{width:36px;height:36px;display:grid;place-items:center;border:1px solid #684687;border-radius:11px;background:#291d37;color:#e6caff}
+.library-account{display:flex;align-items:center;gap:8px;color:#92899e;font-size:11px}.library-online{width:7px;height:7px;border-radius:50%;background:#8bd4a9;box-shadow:0 0 9px #8bd4a966}
+.library-content{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:54px 0 80px}
+.library-welcome{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.library-kicker{color:#aa85c9;font:9px 'DM Mono';letter-spacing:1.8px}
+.library-welcome h1{margin:8px 0 5px;font-size:34px;letter-spacing:-1.4px}.library-welcome p{margin:0;color:#928a9e;font-size:13px}
+.new-project-button{min-height:43px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:0 18px;border:0;border-radius:9px;background:linear-gradient(110deg,#9855d2,#b96de4);color:white;font-size:12px;font-weight:800;box-shadow:0 8px 24px #9a59ce2c}
+.new-project-button:hover{filter:brightness(1.12);transform:translateY(-1px)}.new-project-button.secondary{margin-top:12px;background:#292033;border:1px solid #604477;box-shadow:none}
+.library-toolbar{display:flex;gap:12px;margin:34px 0 30px}.project-search{height:42px;display:flex;align-items:center;gap:10px;flex:1;max-width:420px;padding:0 13px;border:1px solid #302b3b;border-radius:8px;background:#15131d;color:#8f849d}.project-search input{width:100%;border:0;outline:0;background:transparent;color:#eee7f6;font:12px 'DM Sans'}.project-search input::placeholder{color:#746d7d}
+.project-sort{min-width:160px;padding:0 12px;border:1px solid #302b3b;border-radius:8px;background:#15131d;color:#c6bdcf;font:11px 'DM Sans'}
+.project-section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}.project-section-heading h2{margin:0;font-size:15px}.project-section-heading span{color:#8a8194;font:10px 'DM Mono'}
+.project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px}
+.project-card{min-width:0;overflow:hidden;border:1px solid #302b3b;border-radius:12px;background:#15131d;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.project-card:hover{transform:translateY(-3px);border-color:#76518f;box-shadow:0 14px 36px #0005}
+.project-open{display:block;width:100%;padding:0;border:0;background:none;text-align:left}
+.project-thumbnail{position:relative;height:142px;display:grid;place-items:center;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#46305c,#21192c 55%,#13121b);color:#e5c9ff}
+.thumbnail-glow{position:absolute;width:180px;height:180px;border-radius:50%;background:#a75fe522;filter:blur(25px)}
+.project-thumbnail>svg{position:relative;filter:drop-shadow(0 8px 18px #0008)}
+.thumbnail-play{position:absolute;right:12px;bottom:12px;width:30px;height:30px;display:grid;place-items:center;border:1px solid #ffffff26;border-radius:8px;background:#100e18b8;color:#e8d8f8}
+.project-card-info{display:flex;flex-direction:column;gap:7px;padding:13px 13px 8px}.project-card-info strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.project-card-info span{display:flex;align-items:center;gap:6px;color:#8d8498;font-size:10px}
+.project-card-actions{display:flex;align-items:center;justify-content:space-between;padding:5px 10px 10px 13px;color:#857b90;font:9px 'DM Mono'}.project-card-actions button{width:29px;height:27px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#a79bad}.project-card-actions button:hover{background:#2b2335;color:#e9d6ff}
+.library-empty{min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1px dashed #393044;border-radius:13px;background:#13111a88}
+.empty-ghost{width:86px;height:86px;display:grid;place-items:center;border:1px solid #604477;border-radius:25px;background:#271d33;color:#d8b3fa}
+.library-empty h3{margin:18px 0 5px;font-size:16px}.library-empty p{margin:0;color:#8e8499;font-size:11px}
+.storage-warning{margin:-14px 0 22px;padding:11px 13px;border:1px solid #805a40;border-radius:7px;background:#2a1d18;color:#e9bd94;font-size:11px}
+.project-modal-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:#05040acc;backdrop-filter:blur(8px)}
+.project-modal{width:min(100%,430px);padding:23px;border:1px solid #4b3a5d;border-radius:14px;background:#17131f;box-shadow:0 24px 90px #000a}
+.modal-heading{display:flex;align-items:flex-start;justify-content:space-between}.modal-heading h2{margin:7px 0 0;font-size:20px}.modal-heading>button{width:30px;height:30px;display:grid;place-items:center;border:1px solid #3a3045;border-radius:7px;background:#211b2a;color:#bda9cd}
+.project-name-field{display:flex;flex-direction:column;gap:9px;margin-top:25px;color:#c8bdcf;font-size:11px}.project-name-field input{height:43px;padding:0 12px;border:1px solid #453650;border-radius:7px;outline:none;background:#100e17;color:#f4edf9;font:12px 'DM Sans'}.project-name-field input:focus{border-color:#b477df}
+.modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:25px}.cancel-project{padding:0 15px;border:1px solid #3d3448;border-radius:8px;background:#211c29;color:#bdb3c7;font-size:11px}
+@media(max-width:650px){.library-topbar{height:58px;padding:0 15px}.library-brand{font-size:15px}.library-brand small{display:none}.library-account{font-size:9px}.library-content{width:calc(100% - 28px);padding:34px 0 55px}.library-welcome{align-items:flex-start;flex-direction:column}.library-welcome h1{font-size:27px}.new-project-button{min-height:40px}.library-toolbar{margin:24px 0;flex-direction:column}.project-sort{height:40px}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.project-thumbnail{height:100px}.project-card-info{padding:10px 9px 6px}.project-card-info strong{font-size:10px}.project-card-info span{font-size:8px}.project-card-actions{padding:4px 6px 8px 9px}.library-empty{min-height:250px}}
+@media(max-width:360px){.project-grid{grid-template-columns:1fr}}
