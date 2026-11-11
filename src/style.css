@@ -479,3 +479,18 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
   .track-label { padding-right:25px; }
   .track-mute { right:3px; width:18px; height:18px; }
 }
+
+
+/* Keep the expanded editing toolbar usable on compact workspaces */
+.timeline-toolbar { min-width:0; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
+.edit-tools { flex:none; }
+.zoom-control { flex:none; }
+.tool-btn { white-space:nowrap; }
+@media (max-width: 760px) and (orientation: landscape) {
+  .timeline-toolbar { gap:7px; padding:0 7px; }
+  .timeline-title { min-width:58px; }
+  .edit-tools { gap:3px; }
+  .tool-btn { padding:0 5px; gap:4px; font-size:9px; }
+  .zoom-control { gap:4px; }
+  .zoom-control input { width:38px; }
+}
