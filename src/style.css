@@ -494,3 +494,26 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
   .zoom-control { gap:4px; }
   .zoom-control input { width:38px; }
 }
+
+
+/* Reliable touch editing: scrolling belongs to the timeline surface, while
+   clip gestures are captured by that stable surface so moving between tracks
+   cannot detach the active pointer handler. */
+.timeline-scroll {
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  scrollbar-width: thin;
+}
+.timeline-clip {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+@media (pointer: coarse) {
+  .timeline-scroll { scroll-behavior: auto; }
+  .timeline-clip { cursor: grab; }
+  .timeline-clip:active { cursor: grabbing; }
+}
