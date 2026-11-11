@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  base: process.env.GITHUB_PAGES === "true" ? "/Ghous-Cut/" : "/",
   plugins: [react()],
   clearScreen: false,
   server: { strictPort: true, port: 1420, host: "127.0.0.1" },
