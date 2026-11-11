@@ -39,7 +39,7 @@ const browserRoot = async (): Promise<OpfsDirectoryHandle | null> => {
   }).storage;
   if (!storage?.getDirectory) return null;
   const root = await storage.getDirectory();
-  return root.getDirectoryHandle("ghouscut", { create: true });
+  return await root.getDirectoryHandle("ghouscut", { create: true }) as unknown as OpfsDirectoryHandle;
 };
 
 const writeOpfsText = async (directory: OpfsDirectoryHandle, name: string, content: string) => {
