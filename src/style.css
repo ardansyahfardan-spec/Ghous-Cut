@@ -166,3 +166,20 @@ button:focus-visible{outline:2px solid #c18af0;outline-offset:2px}
 .library-orientation-gate small{max-width:290px;margin-top:15px;color:#777d8e;font-size:10px;line-height:1.5}
 
 .project-name-field select{height:43px;padding:0 12px;border:1px solid #453650;border-radius:7px;outline:none;background:#100e17;color:#f4edf9;font:12px "DM Sans";color-scheme:dark}.project-name-field select:focus{border-color:#b477df}
+
+
+/* Shortcut reference and editor interaction polish */
+.shortcuts-backdrop{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:#05060bc9;backdrop-filter:blur(12px)}
+.shortcuts-dialog{width:min(100%,520px);max-height:min(86vh,760px);overflow:auto;padding:22px;border:1px solid #423452;border-radius:14px;background:#14131d;box-shadow:0 28px 90px #000b}
+.shortcuts-dialog>header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid #302b3b}
+.shortcuts-dialog h2{margin:0;font-size:20px;letter-spacing:-.5px;color:#f0e9f7}
+.shortcut-group{padding:14px 0;border-bottom:1px solid #2b2935}
+.shortcut-group h3{margin:0 0 9px;color:#c99be9;font:10px 'DM Mono';letter-spacing:1.1px;text-transform:uppercase}
+.shortcut-group>div{min-height:34px;display:flex;align-items:center;gap:5px;color:#c6c2cf;font-size:11px}
+.shortcut-group>div>span{margin-right:auto}
+kbd{min-width:25px;padding:4px 7px;border:1px solid #51445f;border-bottom-width:2px;border-radius:5px;background:#211c2b;color:#e6d4f5;text-align:center;font:10px 'DM Mono'}
+.shortcuts-dialog>p{margin:14px 0 0;color:#898496;font-size:10px;line-height:1.5}
+.shortcut-help-btn{white-space:nowrap}
+.history-tool{width:29px;justify-content:center;padding:0}
+@media(max-width:1150px){.shortcut-help-btn{font-size:0;gap:0}.shortcut-help-btn svg{width:16px;height:16px}}
+@media(max-width:900px) and (orientation:landscape){.shortcut-help-btn{padding:6px 7px}.history-tool{height:23px;width:24px}}
