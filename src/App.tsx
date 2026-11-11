@@ -416,7 +416,8 @@ export default function App() {
   const [draftName, setDraftName] = useState("");
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
-  const [phonePortrait, setPhonePortrait] = useState(false);\n  const projectFileInputRef = useRef<HTMLInputElement>(null);
+  const [phonePortrait, setPhonePortrait] = useState(false);
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
 
   const exportProject = async (project: StoredProject<Clip>) => {
     try {
