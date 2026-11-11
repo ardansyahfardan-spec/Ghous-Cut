@@ -117,7 +117,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     null;
   const currentPreview = activeVisualClips[activeVisualClips.length - 1] || activeAudioClips[0] || null;
   const activeMediaKey = [...activeVisualClips, ...activeAudioClips]
-    .filter(c => c.kind === "video" || c.kind === "audio").map(c => c.id).join("|");
+    .filter(c => c.kind === "video" || c.kind === "audio").map(c => [c.id, c.src, c.start, c.sourceIn, c.duration, c.volume ?? 1].join(":")).join("|");
   const duration = Math.max(30, ...clips.map(c => c.start + c.duration + 2));
   const scale = SCALE * zoom;
   const selectedSrc = currentPreview?.src || "";
@@ -453,7 +453,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         }
         case "Home": event.preventDefault(); setPlayhead(0); break;
         case "End": event.preventDefault(); setPlayhead(duration); break;
-        case "Escape": setPlaying(false); previewRef.current?.pause(); audioRef.current?.pause(); break;
+        case "Escape": setPlaying(false); mediaRefs.current.forEach(element => element.pause()); break;
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -505,6 +505,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               }} src={clip.src} className="preview-media preview-layer" style={{ zIndex: clip.track + 1 }}
                 muted={false} playsInline preload="auto"
                 onLoadedMetadata={e => {
+                  const target = Math.max(0, clip.sourceIn + playhead - clip.start);
+                  if (!playing) {
+                    try { e.currentTarget.currentTime = Math.min(target, e.currentTarget.duration); } catch { /* Wait for media readiness. */ }
+                  }
                   const d = e.currentTarget.duration;
                   if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
                 }}
