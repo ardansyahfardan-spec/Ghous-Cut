@@ -1,78 +1,59 @@
 $ErrorActionPreference = "Stop"
-$iconDir = Join-Path $PSScriptRoot "..\..\src-tauri\icons"
+Add-Type -AssemblyName System.Drawing
+
+$root = Join-Path $PSScriptRoot "..\.."
+$iconDir = Join-Path $root "src-tauri\icons"
+$logoPath = Join-Path $root "public\logo ghous cut.png"
+$outputPath = Join-Path $iconDir "icon.ico"
+
+if (-not (Test-Path $logoPath)) {
+  throw "Official Ghous Cut logo not found: $logoPath"
+}
 New-Item -ItemType Directory -Force -Path $iconDir | Out-Null
 
-$width = 32
-$height = 32
-$pixels = New-Object byte[] ($width * $height * 4)
+# Keep the supplied black logo unchanged. A warm cream tile preserves contrast
+# in Windows taskbars, Start menu, shortcuts, and installer surfaces.
+$size = 256
+$bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+$graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$graphics.Clear([System.Drawing.Color]::Transparent)
 
-for ($y = 0; $y -lt $height; $y++) {
-  for ($x = 0; $x -lt $width; $x++) {
-    $cornerX = $x
-    if ($x -lt 6) { $cornerX = 6 } elseif ($x -ge 26) { $cornerX = 25 }
-    $cornerY = $y
-    if ($y -lt 6) { $cornerY = 6 } elseif ($y -ge 26) { $cornerY = 25 }
-    $inside = (($x - $cornerX) * ($x - $cornerX) + ($y - $cornerY) * ($y - $cornerY)) -le 36
+$tile = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 242, 232, 211))
+$path = New-Object System.Drawing.Drawing2D.GraphicsPath
+$radius = 48
+$diameter = $radius * 2
+$path.AddArc(0, 0, $diameter, $diameter, 180, 90)
+$path.AddArc(($size - $diameter), 0, $diameter, $diameter, 270, 90)
+$path.AddArc(($size - $diameter), ($size - $diameter), $diameter, $diameter, 0, 90)
+$path.AddArc(0, ($size - $diameter), $diameter, $diameter, 90, 90)
+$path.CloseFigure()
+$graphics.FillPath($tile, $path)
 
-    $dx = $x - 16
-    $dy = $y - 15
-    $head = (($dx * $dx) + ($dy * $dy)) -le 110 -and $y -le 16
-    $body = $x -ge 7 -and $x -le 24 -and $y -ge 13 -and $y -le 24
-    $scallop = $y -ge 25 -and $y -le 27 -and (($x -ge 7 -and $x -le 10) -or ($x -ge 13 -and $x -le 19) -or ($x -ge 22 -and $x -le 24))
-    $ghost = $head -or $body -or $scallop
+$logo = [System.Drawing.Image]::FromFile($logoPath)
+$maxSize = 196.0
+$scale = [Math]::Min($maxSize / $logo.Width, $maxSize / $logo.Height)
+$drawWidth = [int][Math]::Round($logo.Width * $scale)
+$drawHeight = [int][Math]::Round($logo.Height * $scale)
+$drawX = [int](($size - $drawWidth) / 2)
+$drawY = [int](($size - $drawHeight) / 2)
+$graphics.DrawImage($logo, $drawX, $drawY, $drawWidth, $drawHeight)
 
-    $r = 34; $g = 23; $b = 45; $a = 255
-    if (-not $inside) { $a = 0 }
-    if ($ghost -and $inside) { $r = 239; $g = 222; $b = 255 }
-    $eyeLeft = (($x - 12.5) * ($x - 12.5) / 3.2) + (($y - 16) * ($y - 16) / 6.2) -le 1
-    $eyeRight = (($x - 19.5) * ($x - 19.5) / 3.2) + (($y - 16) * ($y - 16) / 6.2) -le 1
-    if (($eyeLeft -or $eyeRight) -and $ghost) { $r = 34; $g = 23; $b = 45 }
-    if ($y -eq 21 -and $x -ge 14 -and $x -le 17 -and $ghost) { $r = 34; $g = 23; $b = 45 }
-
-    # DIB bitmap rows are stored bottom-up.
-    $index = (((($height - 1 - $y) * $width) + $x) * 4)
-    $pixels[$index] = [byte]$b
-    $pixels[$index + 1] = [byte]$g
-    $pixels[$index + 2] = [byte]$r
-    $pixels[$index + 3] = [byte]$a
-  }
+$hIcon = $bitmap.GetHicon()
+$icon = [System.Drawing.Icon]::FromHandle($hIcon)
+$stream = [System.IO.File]::Create($outputPath)
+try {
+  $icon.Save($stream)
+} finally {
+  $stream.Dispose()
+  $icon.Dispose()
+  $logo.Dispose()
+  $path.Dispose()
+  $tile.Dispose()
+  $graphics.Dispose()
+  $bitmap.Dispose()
+  Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)] public static extern bool DestroyIcon(System.IntPtr hIcon);' -ErrorAction SilentlyContinue
+  [Win32.NativeMethods]::DestroyIcon($hIcon) | Out-Null
 }
-
-$mask = New-Object byte[] ($height * 4)
-$stream = New-Object System.IO.MemoryStream
-$writer = New-Object System.IO.BinaryWriter($stream)
-$writer.Write([uint32]40)
-$writer.Write([int32]$width)
-$writer.Write([int32]($height * 2))
-$writer.Write([uint16]1)
-$writer.Write([uint16]32)
-$writer.Write([uint32]0)
-$writer.Write([uint32]$pixels.Length)
-$writer.Write([int32]0)
-$writer.Write([int32]0)
-$writer.Write([uint32]0)
-$writer.Write([uint32]0)
-$writer.Write($pixels)
-$writer.Write($mask)
-$dib = $stream.ToArray()
-$writer.Dispose()
-$stream.Dispose()
-
-$icoStream = New-Object System.IO.MemoryStream
-$icoWriter = New-Object System.IO.BinaryWriter($icoStream)
-$icoWriter.Write([uint16]0)
-$icoWriter.Write([uint16]1)
-$icoWriter.Write([uint16]1)
-$icoWriter.Write([byte]$width)
-$icoWriter.Write([byte]$height)
-$icoWriter.Write([byte]0)
-$icoWriter.Write([byte]0)
-$icoWriter.Write([uint16]1)
-$icoWriter.Write([uint16]32)
-$icoWriter.Write([uint32]$dib.Length)
-$icoWriter.Write([uint32]22)
-$icoWriter.Write($dib)
-[System.IO.File]::WriteAllBytes((Join-Path $iconDir "icon.ico"), $icoStream.ToArray())
-$icoWriter.Dispose()
-$icoStream.Dispose()
-Write-Host "Generated Ghous Cut ghost icon: src-tauri/icons/icon.ico"
+Write-Host "Generated Windows icon from the official Ghous Cut logo: $outputPath"
