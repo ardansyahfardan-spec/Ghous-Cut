@@ -428,6 +428,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       const mod = event.ctrlKey || event.metaKey;
       if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
       if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
+      if (mod && event.key === "0") { event.preventDefault(); setZoom(1); return; }
       if (mod && event.shiftKey && event.key.toLowerCase() === "b") { event.preventDefault(); splitAllTracks(); return; }
       if (mod && event.key.toLowerCase() === "b") { event.preventDefault(); splitSelected(); return; }
       if (mod && event.key.toLowerCase() === "c") { event.preventDefault(); copySelected(); return; }
@@ -461,7 +462,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         }
         case "Home": event.preventDefault(); setPlayhead(0); break;
         case "End": event.preventDefault(); setPlayhead(duration); break;
-        case "Escape": setPlaying(false); mediaRefs.current.forEach(element => element.pause()); break;
+        case "?": event.preventDefault(); setShowShortcuts(true); break;
+        case "Escape":
+          if (showShortcuts) setShowShortcuts(false);
+          setPlaying(false);
+          mediaRefs.current.forEach(element => element.pause());
+          break;
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -641,9 +647,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       <section className="shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" onClick={e => e.stopPropagation()}>
         <header><div><span className="eyebrow">GHOUS CUT · EDITOR</span><h2 id="shortcuts-title">Keyboard shortcuts</h2></div><button className="icon-btn" onClick={() => setShowShortcuts(false)} aria-label="Close shortcuts"><X size={16}/></button></header>
         <div className="shortcut-group"><h3>Playback & navigation</h3><div><span>Play / Pause</span><kbd>Space</kbd></div><div><span>Previous / next frame</span><kbd>←</kbd><kbd>→</kbd></div><div><span>Previous / next edit point</span><kbd>↑</kbd><kbd>↓</kbd></div><div><span>Go to beginning / end</span><kbd>Home</kbd><kbd>End</kbd></div><div><span>Stop playback</span><kbd>Esc</kbd></div></div>
-        <div className="shortcut-group"><h3>Editing</h3><div><span>Split selected clip</span><kbd>Ctrl</kbd><kbd>B</kbd></div><div><span>Split all tracks</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></div><div><span>Copy / Cut / Paste</span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>Ctrl</kbd><kbd>X</kbd><kbd>Ctrl</kbd><kbd>V</kbd></div><div><span>Duplicate selected clip</span><kbd>Ctrl</kbd><kbd>D</kbd></div><div><span>Timeline zoom in / out</span><kbd>Ctrl</kbd><kbd>+</kbd><kbd>Ctrl</kbd><kbd>−</kbd></div><div><span>Trim left / right to playhead</span><kbd>Q</kbd><kbd>W</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></div></div>
+        <div className="shortcut-group"><h3>Editing</h3><div><span>Split selected clip</span><kbd>Ctrl</kbd><kbd>B</kbd></div><div><span>Split all tracks</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></div><div><span>Copy / Cut / Paste</span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>Ctrl</kbd><kbd>X</kbd><kbd>Ctrl</kbd><kbd>V</kbd></div><div><span>Duplicate selected clip</span><kbd>Ctrl</kbd><kbd>D</kbd></div><div><span>Timeline zoom in / out / reset</span><kbd>Ctrl</kbd><kbd>+</kbd><kbd>Ctrl</kbd><kbd>−</kbd><kbd>Ctrl</kbd><kbd>0</kbd></div><div><span>Trim left / right to playhead</span><kbd>Q</kbd><kbd>W</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Y</kbd></div></div>
         <div className="shortcut-group"><h3>Project</h3><div><span>Import media</span><kbd>Ctrl</kbd><kbd>I</kbd></div><div><span>Save project file</span><kbd>Ctrl</kbd><kbd>S</kbd></div><div><span>Export video</span><kbd>Ctrl</kbd><kbd>E</kbd></div></div>
-        <p>Shortcut tidak aktif saat kamu sedang mengetik di kolom input.</p>
+        <p><kbd>?</kbd> membuka daftar shortcut. <kbd>Esc</kbd> menutup dialog atau menghentikan playback. Shortcut tidak aktif saat kamu sedang mengetik di kolom input.</p>
       </section>
     </div>}
     <footer className="statusbar"><div><span className="status-led"/> {notice}</div><div><WandSparkles size={13}/> GHOUS CUT <span className="status-sep">|</span> LOCAL WORKSPACE</div></footer>
