@@ -46,6 +46,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
+  const touchDrag = useRef<{ id: string; startX: number; originalStart: number; track: number; moved: boolean } | null>(null);
   const [projectReady, setProjectReady] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const previewRef = useRef<HTMLVideoElement>(null);
@@ -522,10 +523,30 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             </div>
             {TRACKS.map(t => <div className="track-row" key={t.id}>
               <div className="track-label"><t.icon size={15}/><div><strong>{t.name}</strong><small>{t.hint}</small></div></div>
-              <div className="track-lane" style={{width:Math.max(800,duration*scale)}} onDragOver={e=>e.preventDefault()} onDrop={e=>{
+              <div className="track-lane" data-track={t.id} style={{width:Math.max(800,duration*scale)}} onDragOver={e=>e.preventDefault()} onDrop={e=>{
                 e.preventDefault();if(dragging)moveClip(dragging,t.id,Math.max(0,(e.clientX-e.currentTarget.getBoundingClientRect().left)/scale));
               }}>
                 {clips.filter(c=>c.track===t.id).map(c=><div key={c.id} draggable onDragStart={()=>setDragging(c.id)} onDragEnd={()=>setDragging(null)}
+                  onPointerDown={e=>{
+                    if(e.pointerType!=="touch" && e.pointerType!=="pen") return;
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    touchDrag.current={id:c.id,startX:e.clientX,originalStart:c.start,track:c.track,moved:false};
+                  }}
+                  onPointerMove={e=>{
+                    const drag=touchDrag.current;
+                    if(!drag || drag.id!==c.id) return;
+                    const lane=document.elementFromPoint(e.clientX,e.clientY)?.closest<HTMLElement>(".track-lane");
+                    const nextTrack=Number(lane?.dataset.track ?? drag.track);
+                    const nextStart=Math.max(0,drag.originalStart+(e.clientX-drag.startX)/scale);
+                    if(!drag.moved){undoStack.current.push(clips);if(undoStack.current.length>100)undoStack.current.shift();redoStack.current=[];drag.moved=true;}
+                    setClips(old=>old.map(item=>item.id===c.id?{...item,start:nextStart,track:nextTrack}:item));
+                  }}
+                  onPointerUp={e=>{
+                    const drag=touchDrag.current;
+                    if(drag?.id===c.id && drag.moved) setNotice("Clip moved on timeline.");
+                    touchDrag.current=null;
+                  }}
+                  onPointerCancel={()=>{touchDrag.current=null;}}
                   className={`timeline-clip ${c.kind} ${selected===c.id?"selected":""}`}
                   style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}
                   onClick={()=>{setSelected(c.id);setPlayhead(c.start);}}>
