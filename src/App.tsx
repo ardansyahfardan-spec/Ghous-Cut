@@ -36,6 +36,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
+  const clipClipboard = useRef<Clip | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -251,10 +252,73 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       ...active, id: crypto.randomUUID(), name: active.name + " (split)",
       start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt
     };
-    updateClip(active.id, { duration: cutAt });
-    updateTimeline(old => [...old, right]);
+    updateTimeline(old => old.flatMap(c => c.id === active.id ? [{ ...c, duration: cutAt }, right] : [c]));
     setSelected(right.id);
     setNotice("Clip split at playhead.");
+  };
+
+  const splitAllTracks = () => {
+    const targets = clips.filter(c => playhead > c.start + 0.08 && playhead < c.start + c.duration - 0.08);
+    if (!targets.length) return setNotice("Tidak ada klip yang melintasi playhead untuk dipotong.");
+    const rightClips = targets.map(c => {
+      const leftDuration = playhead - c.start;
+      return {
+        ...c,
+        id: crypto.randomUUID(),
+        name: c.name + " (split)",
+        start: playhead,
+        sourceIn: c.sourceIn + leftDuration,
+        duration: c.duration - leftDuration
+      };
+    });
+    const rightById = new Map(targets.map((c, i) => [c.id, rightClips[i]]));
+    updateTimeline(old => old.flatMap(c => {
+      const right = rightById.get(c.id);
+      return right ? [{ ...c, duration: playhead - c.start }, right] : [c];
+    }));
+    setSelected(rightClips[0].id);
+    setNotice(`Split all tracks: ${rightClips.length} clip(s) cut at playhead.`);
+  };
+
+  const copySelected = () => {
+    if (!active) return setNotice("Pilih klip yang ingin disalin.");
+    clipClipboard.current = { ...active };
+    setNotice("Clip copied.");
+  };
+  const cutSelected = () => {
+    if (!active) return setNotice("Pilih klip yang ingin dipotong.");
+    clipClipboard.current = { ...active };
+    updateTimeline(old => old.filter(c => c.id !== active.id));
+    setSelected(null);
+    setNotice("Clip cut to Ghous Cut clipboard.");
+  };
+  const pasteClip = () => {
+    const source = clipClipboard.current;
+    if (!source) return setNotice("Clipboard Ghous Cut masih kosong.");
+    const pasted: Clip = {
+      ...source,
+      id: crypto.randomUUID(),
+      name: source.name.replace(/ \(copy\)$/i, "") + " (copy)",
+      start: playhead,
+      file: source.file,
+      src: source.src
+    };
+    updateTimeline(old => [...old, pasted]);
+    setSelected(pasted.id);
+    setNotice("Clip pasted at playhead.");
+  };
+  const duplicateSelected = () => {
+    if (!active) return setNotice("Pilih klip yang ingin diduplikasi.");
+    const duplicate: Clip = {
+      ...active,
+      id: crypto.randomUUID(),
+      name: active.name.replace(/ \(copy\)$/i, "") + " (copy)",
+      start: active.start + active.duration
+    };
+    updateTimeline(old => [...old, duplicate]);
+    setSelected(duplicate.id);
+    setPlayhead(duplicate.start);
+    setNotice("Clip duplicated after the original.");
   };
 
   const trimLeft = () => {
@@ -333,7 +397,14 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       const mod = event.ctrlKey || event.metaKey;
       if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); return; }
       if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
+      if (mod && event.shiftKey && event.key.toLowerCase() === "b") { event.preventDefault(); splitAllTracks(); return; }
       if (mod && event.key.toLowerCase() === "b") { event.preventDefault(); splitSelected(); return; }
+      if (mod && event.key.toLowerCase() === "c") { event.preventDefault(); copySelected(); return; }
+      if (mod && event.key.toLowerCase() === "x") { event.preventDefault(); cutSelected(); return; }
+      if (mod && event.key.toLowerCase() === "v") { event.preventDefault(); pasteClip(); return; }
+      if (mod && event.key.toLowerCase() === "d") { event.preventDefault(); duplicateSelected(); return; }
+      if (mod && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom(v => Math.min(1.8, Math.round((v + 0.1) * 10) / 10)); return; }
+      if (mod && event.key === "-") { event.preventDefault(); setZoom(v => Math.max(0.6, Math.round((v - 0.1) * 10) / 10)); return; }
       if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
       if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project save requested."); return; }
       if (mod && event.key.toLowerCase() === "e") { event.preventDefault(); void exportVideo(); return; }
@@ -422,7 +493,11 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
           <div className="timeline-toolbar">
             <div className="timeline-title"><span className="eyebrow">EDIT</span><h2>Timeline</h2></div>
             <div className="edit-tools">
-              <button className="tool-btn" onClick={splitSelected} title="Split at playhead"><Scissors size={15}/><span>Split</span></button>
+              <button className="tool-btn" onClick={splitSelected} title="Split selected clip at playhead"><Scissors size={15}/><span>Split</span></button>
+              <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks at playhead">✂<span>Split all</span></button>
+              <button className="tool-btn" onClick={copySelected} title="Copy selected clip">▢<span>Copy</span></button>
+              <button className="tool-btn" onClick={pasteClip} title="Paste clip at playhead">▣<span>Paste</span></button>
+              <button className="tool-btn" onClick={duplicateSelected} title="Duplicate selected clip">⧉<span>Duplicate</span></button>
               <button className="tool-btn" onClick={trimLeft} title="Trim beginning to playhead">◧<span>Trim left</span></button>
               <button className="tool-btn" onClick={trimRight} title="Trim end to playhead">◨<span>Trim right</span></button>
               <button className="tool-btn danger-tool" onClick={removeSelected} title="Remove selected clip"><Trash2 size={15}/></button>
@@ -472,7 +547,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       <section className="shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" onClick={e => e.stopPropagation()}>
         <header><div><span className="eyebrow">GHOUS CUT · EDITOR</span><h2 id="shortcuts-title">Keyboard shortcuts</h2></div><button className="icon-btn" onClick={() => setShowShortcuts(false)} aria-label="Close shortcuts"><X size={16}/></button></header>
         <div className="shortcut-group"><h3>Playback & navigation</h3><div><span>Play / Pause</span><kbd>Space</kbd></div><div><span>Previous / next frame</span><kbd>←</kbd><kbd>→</kbd></div><div><span>Previous / next edit point</span><kbd>↑</kbd><kbd>↓</kbd></div><div><span>Go to beginning / end</span><kbd>Home</kbd><kbd>End</kbd></div><div><span>Stop playback</span><kbd>Esc</kbd></div></div>
-        <div className="shortcut-group"><h3>Editing</h3><div><span>Split selected clip at playhead</span><kbd>Ctrl</kbd><kbd>B</kbd></div><div><span>Trim left / right to playhead</span><kbd>Q</kbd><kbd>W</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></div></div>
+        <div className="shortcut-group"><h3>Editing</h3><div><span>Split selected clip</span><kbd>Ctrl</kbd><kbd>B</kbd></div><div><span>Split all tracks</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></div><div><span>Copy / Cut / Paste</span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>Ctrl</kbd><kbd>X</kbd><kbd>Ctrl</kbd><kbd>V</kbd></div><div><span>Duplicate selected clip</span><kbd>Ctrl</kbd><kbd>D</kbd></div><div><span>Timeline zoom in / out</span><kbd>Ctrl</kbd><kbd>+</kbd><kbd>Ctrl</kbd><kbd>−</kbd></div><div><span>Trim left / right to playhead</span><kbd>Q</kbd><kbd>W</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></div></div>
         <div className="shortcut-group"><h3>Project</h3><div><span>Import media</span><kbd>Ctrl</kbd><kbd>I</kbd></div><div><span>Save project file</span><kbd>Ctrl</kbd><kbd>S</kbd></div><div><span>Export video</span><kbd>Ctrl</kbd><kbd>E</kbd></div></div>
         <p>Shortcut tidak aktif saat kamu sedang mengetik di kolom input.</p>
       </section>
