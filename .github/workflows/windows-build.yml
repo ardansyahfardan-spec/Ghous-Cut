@@ -7,11 +7,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Generate Windows application icon
+        shell: pwsh
+        run: ./.github/scripts/create-windows-icon.ps1
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -27,4 +33,5 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 14
