@@ -375,8 +375,35 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     setSelected(null);
     setNotice("Clip removed from timeline.");
   };
+  // Magnetic timeline snapping: align the moved clip's start/end to nearby
+  // clip edges, the playhead, or the beginning of the timeline.
+  const snapTime = (id: string, start: number) => {
+    const moving = clips.find(c => c.id === id);
+    if (!moving) return Math.max(0, start);
+    const candidates = [0, playhead];
+    clips.forEach(other => {
+      if (other.id === id) return;
+      candidates.push(other.start, other.start + other.duration);
+    });
+    let best = Math.max(0, start);
+    let distance = 0.18;
+    candidates.forEach(point => {
+      const alignedStart = Math.max(0, point);
+      const alignedEnd = Math.max(0, point - moving.duration);
+      [alignedStart, alignedEnd].forEach(candidate => {
+        const delta = Math.abs(candidate - start);
+        if (delta < distance) {
+          distance = delta;
+          best = candidate;
+        }
+      });
+    });
+    return best;
+  };
+
   const moveClip = (id: string, track: number, start: number) => {
-    updateTimeline(old => old.map(c => c.id === id ? { ...c, track, start: Math.max(0, start) } : c));
+    const snappedStart = snapTime(id, start);
+    updateTimeline(old => old.map(c => c.id === id ? { ...c, track, start: snappedStart } : c));
     setDragging(null);
   };
 
@@ -614,7 +641,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                     if(!drag || drag.id!==c.id) return;
                     const lane=document.elementFromPoint(e.clientX,e.clientY)?.closest<HTMLElement>(".track-lane");
                     const nextTrack=Number(lane?.dataset.track ?? drag.track);
-                    const nextStart=Math.max(0,drag.originalStart+(e.clientX-drag.startX)/scale);
+                    const rawStart=Math.max(0,drag.originalStart+(e.clientX-drag.startX)/scale);
+                    const nextStart=snapTime(c.id,rawStart);
                     if(!drag.moved){undoStack.current.push(clips);if(undoStack.current.length>100)undoStack.current.shift();redoStack.current=[];drag.moved=true;}
                     setClips(old=>old.map(item=>item.id===c.id?{...item,start:nextStart,track:nextTrack}:item));
                   }}
