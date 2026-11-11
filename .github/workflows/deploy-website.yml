@@ -40,8 +40,8 @@ jobs:
           set -euo pipefail
           test -s dist/index.html
           grep -q 'id="root"' dist/index.html
-          JS_PATH="$(grep -oE 'src="[^"]+\\.js"' dist/index.html | head -n 1 | cut -d '"' -f 2)"
-          CSS_PATH="$(grep -oE 'href="[^"]+\\.css"' dist/index.html | head -n 1 | cut -d '"' -f 2)"
+          JS_PATH="$(grep -oE 'src="[^"]+\.js"' dist/index.html | head -n 1 | cut -d '"' -f 2)"
+          CSS_PATH="$(grep -oE 'href="[^"]+\.css"' dist/index.html | head -n 1 | cut -d '"' -f 2)"
           test -n "$JS_PATH"
           test -n "$CSS_PATH"
           JS_FILE="${JS_PATH#/Ghous-Cut/}"
@@ -79,8 +79,8 @@ jobs:
           done
           test -s /tmp/ghous-cut-index.html
           grep -q 'id="root"' /tmp/ghous-cut-index.html
-          JS_PATH="$(grep -oE 'src="[^"]+\\.js"' /tmp/ghous-cut-index.html | head -n 1 | cut -d '"' -f 2)"
-          CSS_PATH="$(grep -oE 'href="[^"]+\\.css"' /tmp/ghous-cut-index.html | head -n 1 | cut -d '"' -f 2)"
+          JS_PATH="$(grep -oE 'src="[^"]+\.js"' /tmp/ghous-cut-index.html | head -n 1 | cut -d '"' -f 2)"
+          CSS_PATH="$(grep -oE 'href="[^"]+\.css"' /tmp/ghous-cut-index.html | head -n 1 | cut -d '"' -f 2)"
           test -n "$JS_PATH"
           test -n "$CSS_PATH"
           curl -fsS "${SITE_URL%/}/${JS_PATH#/Ghous-Cut/}" -o /dev/null
