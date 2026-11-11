@@ -100,17 +100,18 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 
   const active = clips.find(c => c.id === selected) || null;
   const activeAtPlayhead = clips.find(c => c.track === 0 && playhead >= c.start && playhead <= c.start + c.duration);
+  const currentPreview = active || activeAtPlayhead;
   const duration = Math.max(30, ...clips.map(c => c.start + c.duration + 2));
   const scale = SCALE * zoom;
-  const selectedSrc = active?.src || activeAtPlayhead?.src || "";
+  const selectedSrc = currentPreview?.src || "";
 
   // Let the browser's native media pipeline drive video/audio playback.
   // A React timer that repeatedly seeks the video element causes dropped frames.
   useEffect(() => {
-    if (!playing || active?.kind === "video" || active?.kind === "audio") return;
+    if (!playing || currentPreview?.kind === "video" || currentPreview?.kind === "audio") return;
     const timer = window.setInterval(() => setPlayhead(v => Math.min(duration, v + 0.1)), 100);
     return () => window.clearInterval(timer);
-  }, [playing, active?.kind, duration]);
+  }, [playing, currentPreview?.kind, duration]);
 
   useEffect(() => {
     if (previewRef.current) previewRef.current.volume = Math.max(0, Math.min(1, active?.volume ?? 1));
@@ -124,7 +125,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     if (Math.abs(el.currentTime - target) > 0.08) {
       el.currentTime = Math.min(target, Number.isFinite(el.duration) ? el.duration : target);
     }
-  }, [playhead, active?.id, active?.sourceIn, active?.start, playing]);
+  }, [playhead, currentPreview?.id, currentPreview?.sourceIn, currentPreview?.start, playing]);
 
   useEffect(() => {
     if (active && playhead < active.start) setPlayhead(active.start);
@@ -280,13 +281,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       audioRef.current?.pause();
       return;
     }
-    if (active?.kind === "video" && previewRef.current) {
+    if (currentPreview?.kind === "video" && previewRef.current) {
       void previewRef.current.play().then(() => setPlaying(true)).catch(() => {
         setNotice("Video belum dapat diputar. Periksa format atau codec file media.");
       });
       return;
     }
-    if (active?.kind === "audio" && audioRef.current) {
+    if (currentPreview?.kind === "audio" && audioRef.current) {
       void audioRef.current.play().then(() => setPlaying(true)).catch(() => {
         setNotice("Audio belum dapat diputar. Periksa format file media.");
       });
