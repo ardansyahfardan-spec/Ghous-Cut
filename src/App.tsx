@@ -616,7 +616,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               <button className="tool-btn" onClick={splitSelected} title="Split selected clip at playhead"><Scissors size={15}/><span>Split</span></button>
               <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks at playhead">✂<span>Split all</span></button>
               <button className="tool-btn" onClick={copySelected} title="Copy selected clips">▢<span>Copy {selectedIds.length>1?selectedIds.length:""}</span></button>
-              <button className="tool-btn" onClick={pasteClip} title="Paste clip at playhead">▣<span>Paste</span></button>
+              <button className="tool-btn" onClick={cutSelected} title="Cut selected clips">✂<span>Cut</span></button>
+              <button className="tool-btn" onClick={pasteClip} title="Paste clips at playhead">▣<span>Paste</span></button>
               <button className="tool-btn" onClick={duplicateSelected} title="Duplicate selected clip">⧉<span>Duplicate</span></button>
               <button className="tool-btn" onClick={trimLeft} title="Trim beginning to playhead">◧<span>Trim left</span></button>
               <button className="tool-btn" onClick={trimRight} title="Trim end to playhead">◨<span>Trim right</span></button>
@@ -694,7 +695,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             </div>)}
             <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
           </div>
-          <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · Ctrl+B split · Q/W trim · Del remove · Ctrl+Z undo</span><span>{clips.length} clips · {fmt(duration)} workspace</span></div>
+          <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · Ctrl+B split · Q/W trim · Del remove · Ctrl+Z undo</span><span>{selectedIds.length?selectedIds.length+" selected · ":""}{clips.length} clips · {fmt(duration)} workspace</span></div>
         </div>
       </section>
 
