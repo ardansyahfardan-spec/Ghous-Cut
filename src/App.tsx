@@ -654,7 +654,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             } else if(drag.mode==="trim-start"){
               const originalEnd=drag.originalStart+drag.originalDuration;
               const candidate=Math.max(0,Math.min(originalEnd-0.1,drag.originalStart+dx/scale));
-              const nextStart=snapTime(drag.id,candidate);
+              const snapPoints=[0,playhead,...clips.filter(item=>item.id!==drag.id).flatMap(item=>[item.start,item.start+item.duration])];
+              let nextStart=candidate,snapDistance=0.18;
+              snapPoints.forEach(point=>{const delta=Math.abs(point-candidate);if(delta<snapDistance){snapDistance=delta;nextStart=point;}});
               const safeStart=Math.min(originalEnd-0.1,Math.max(0,nextStart));
               setClips(old=>old.map(item=>item.id===drag.id?{
                 ...item,start:safeStart,duration:originalEnd-safeStart,
