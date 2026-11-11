@@ -47,7 +47,30 @@ fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
     temporary.set_extension(format!("{nonce}.tmp"));
     let content = serde_json::to_vec_pretty(&project).map_err(|e| e.to_string())?;
     fs::write(&temporary, content).map_err(|e| format!("Cannot write local project: {e}"))?;
-    fs::rename(&temporary, &path).map_err(|e| format!("Cannot finalize local project: {e}"))?;
+
+    // Windows does not replace an existing destination with std::fs::rename.
+    // Keep a short-lived backup so a failed final rename does not destroy the last save.
+    let mut backup = path.clone();
+    backup.set_extension("json.bak");
+    let had_previous = path.exists();
+    if had_previous {
+        if backup.exists() {
+            fs::remove_file(&backup).map_err(|e| format!("Cannot clear previous project backup: {e}"))?;
+        }
+        fs::rename(&path, &backup).map_err(|e| format!("Cannot stage previous project save: {e}"))?;
+    }
+
+    if let Err(error) = fs::rename(&temporary, &path) {
+        if had_previous {
+            let _ = fs::rename(&backup, &path);
+        }
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("Cannot finalize local project: {error}"));
+    }
+
+    if had_previous {
+        let _ = fs::remove_file(&backup);
+    }
     Ok(())
 }
 
