@@ -581,109 +581,58 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
 }
 
 
-/* The project library remains vertically scrollable on phones in either orientation. */
-html, body { min-height: 100%; }
-body { overflow-x: hidden; overflow-y: auto; }
+
+/* Project library: use the document as the only vertical scroll container.
+   The active-screen class prevents editor landscape viewport locks from leaking here. */
+html.library-page {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+body.library-page {
+  width: 100%;
+  min-width: 0 !important;
+  min-height: 100%;
+  height: auto !important;
+  margin: 0;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+}
+body.library-page #root {
+  width: 100%;
+  min-height: 100dvh;
+  height: auto;
+  overflow: visible;
+}
 .project-library {
+  position: relative;
+  display: flow-root;
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  height: auto;
+  max-height: none;
   overflow: visible;
-  touch-action: pan-y;
+  touch-action: auto;
   overscroll-behavior-y: auto;
 }
 .library-content {
+  height: auto;
+  min-height: 0;
   padding-bottom: max(80px, env(safe-area-inset-bottom));
 }
-@media (max-width: 760px) {
-  body { min-width: 0; overflow-x: hidden; overflow-y: auto; }
+@media (max-width: 900px) {
+  body.library-page { min-width: 0 !important; }
   .project-library { min-height: 100svh; min-height: 100dvh; }
-  .library-content { padding-top: 30px; padding-bottom: max(56px, env(safe-area-inset-bottom)); }
 }
-
-
-/* Make the home project list its own scroll container on mobile landscape.
-   The editor intentionally locks the document viewport, so the library must scroll internally. */
-@media (max-width: 900px) and (orientation: landscape) {
-  .project-library {
-    display: block;
-    width: 100%;
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    max-height: none;
-    overflow-x: hidden;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
-    overscroll-behavior-y: contain;
-  }
+@media (max-width: 760px) {
   .library-content {
-    height: auto;
-    min-height: calc(100% - 68px);
+    padding-top: 30px;
     padding-bottom: max(64px, env(safe-area-inset-bottom));
-  }
-}
-
-
-/* The library is a document page, not the fixed-height editor. On mobile landscape,
-   override the editor's body overflow lock so iOS Safari scrolls the document itself. */
-@media (max-width: 900px) and (orientation: landscape) {
-  html:has(.project-library),
-  body:has(.project-library) {
-    height: auto !important;
-    min-height: 100%;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch;
-  }
-  .project-library {
-    height: auto !important;
-    min-height: 100dvh;
-    max-height: none !important;
-    overflow: visible !important;
-    touch-action: pan-y pan-x;
-  }
-}
-
-
-/* Final iOS landscape library scroll fix: make the library itself a fixed,
-   independently scrollable viewport. This avoids depending on body scrolling
-   when the editor's landscape rules lock the document. */
-@media (max-width: 900px) and (orientation: landscape) {
-  html, body, #root {
-    width: 100%;
-    min-width: 0 !important;
-    min-height: 0 !important;
-  }
-  body {
-    height: 100%;
-    overflow: hidden !important;
-  }
-  #root {
-    height: 100%;
-    overflow: hidden;
-  }
-  .project-library {
-    position: fixed !important;
-    inset: 0 !important;
-    display: block !important;
-    width: 100% !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow-x: hidden !important;
-    overflow-y: scroll !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior-y: contain;
-    touch-action: pan-y !important;
-  }
-  .library-topbar {
-    position: relative;
-  }
-  .library-content {
-    height: auto !important;
-    min-height: calc(100% + 1px) !important;
-    padding-bottom: max(96px, env(safe-area-inset-bottom)) !important;
   }
 }
