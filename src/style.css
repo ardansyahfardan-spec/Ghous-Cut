@@ -942,12 +942,16 @@ body.library-page #root {
 
 
 /* Portrait editing dock: move secondary actions below the timeline, not into a crowded top row. */
-.mobile-edit-dock { display: none; }
+.mobile-edit-dock, .portrait-primary-tools { display: none; }
 @media (max-width: 760px) and (orientation: portrait) {
   .timeline-toolbar .edit-tools { display: none !important; }
-  .timeline-toolbar { flex-wrap: nowrap; min-height: 42px; }
+  .timeline-toolbar { flex-wrap: nowrap; min-height: 42px; gap: 5px; }
   .timeline-title { flex: 0 1 auto; }
-  .zoom-control { margin-left: auto; }
+  .portrait-primary-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .portrait-primary-tools .tool-btn { flex: 0 0 31px; width: 31px; min-width: 31px; height: 31px; border-radius: 8px; padding: 0; }
+  .portrait-primary-tools .tool-btn svg { width: 16px; height: 16px; }
+  .zoom-control { margin-left: 0; gap: 3px; }
+  .zoom-control input { width: 42px; }
   .mobile-edit-dock {
     display: flex;
     flex: 0 0 62px;
