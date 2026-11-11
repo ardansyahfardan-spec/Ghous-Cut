@@ -47,6 +47,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [denoise, setDenoise] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showMobileInspector, setShowMobileInspector] = useState(false);
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -492,7 +493,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     <header className="topbar">
       <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><BrandLogo size={22}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
-      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost save-action" onClick={() => void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() })} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
+      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost mobile-properties-action" onClick={() => setShowMobileInspector(value => !value)} title="Clip properties" aria-label="Clip properties"><Settings2 size={16}/></button><button className="btn ghost save-action" onClick={() => { void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project file saved."); }} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
     </header>
 
     <main className="workspace">
@@ -710,7 +711,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         </div>
       </section>
 
-      <aside className="inspector-panel panel">
+      <aside className={`inspector-panel panel ${showMobileInspector ? "mobile-open" : ""}`}>
         <div className="panel-heading"><div><span className="eyebrow">PROPERTIES</span><h2>Inspector</h2></div><Settings2 size={17} className="subtle-icon"/></div>
         {active ? <div className="inspector-content">
           <div className="selected-file"><div className={`selected-file-icon ${active.kind}`}>{active.kind==="video"?<Video/>:active.kind==="image"?<ImageIcon/>:<Music2/>}</div><strong>{active.name}</strong><small>{active.kind.toUpperCase()} CLIP</small></div>
