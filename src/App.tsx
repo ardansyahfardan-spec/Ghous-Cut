@@ -49,8 +49,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const touchDrag = useRef<{ id: string; startX: number; originalStart: number; track: number; moved: boolean } | null>(null);
   const [projectReady, setProjectReady] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
-  const previewRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const mediaRefs = useRef<Map<string, HTMLMediaElement>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = "__TAURI_INTERNALS__" in window;
   const hasLocalBrowserFilesystem = browserPersistenceAvailable();
@@ -105,8 +104,20 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   }, [clips, projectReady, projectId, projectName]);
 
   const active = clips.find(c => c.id === selected) || null;
-  const activeAtPlayhead = clips.find(c => c.track === 0 && playhead >= c.start && playhead <= c.start + c.duration);
-  const currentPreview = active || activeAtPlayhead;
+  const activeVisualClips = clips.filter(c =>
+    c.track < 2 && c.kind !== "audio" && playhead >= c.start && playhead < c.start + c.duration
+  ).sort((a, b) => a.track - b.track || a.start - b.start);
+  const activeAudioClips = clips.filter(c =>
+    c.track === 2 && c.kind === "audio" && playhead >= c.start && playhead < c.start + c.duration
+  );
+  const clockClip =
+    activeVisualClips.find(c => c.track === 0 && c.kind === "video") ||
+    activeVisualClips.find(c => c.kind === "video") ||
+    activeAudioClips[0] ||
+    null;
+  const currentPreview = activeVisualClips[activeVisualClips.length - 1] || activeAudioClips[0] || null;
+  const activeMediaKey = [...activeVisualClips, ...activeAudioClips]
+    .filter(c => c.kind === "video" || c.kind === "audio").map(c => c.id).join("|");
   const duration = Math.max(30, ...clips.map(c => c.start + c.duration + 2));
   const scale = SCALE * zoom;
   const selectedSrc = currentPreview?.src || "";
@@ -134,27 +145,34 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     return next;
   });
 
-  // Let the browser's native media pipeline drive video/audio playback.
-  // A React timer that repeatedly seeks the video element causes dropped frames.
+  // Every visible video layer and audio clip shares the same timeline clock.
+  // The primary video (or first active audio clip) drives the playhead; secondary
+  // media is gently re-synchronized instead of repeatedly seeking the master.
   useEffect(() => {
-    if (!playing || currentPreview?.kind === "video" || currentPreview?.kind === "audio") return;
-    const timer = window.setInterval(() => setPlayhead(v => Math.min(duration, v + 0.1)), 100);
+    if (!playing || clockClip) return;
+    const timer = window.setInterval(() => setPlayhead(v => Math.min(duration, v + 0.05)), 50);
     return () => window.clearInterval(timer);
-  }, [playing, currentPreview?.kind, duration]);
+  }, [playing, clockClip?.id, duration]);
 
   useEffect(() => {
-    if (previewRef.current) previewRef.current.volume = Math.max(0, Math.min(1, active?.volume ?? 1));
-    if (audioRef.current) audioRef.current.volume = Math.max(0, Math.min(1, active?.volume ?? 1));
-  }, [active?.id, active?.volume]);
-
-  useEffect(() => {
-    const el = previewRef.current;
-    if (!el || !active || active.kind !== "video" || playing) return;
-    const target = Math.max(0, active.sourceIn + playhead - active.start);
-    if (Math.abs(el.currentTime - target) > 0.08) {
-      el.currentTime = Math.min(target, Number.isFinite(el.duration) ? el.duration : target);
-    }
-  }, [playhead, currentPreview?.id, currentPreview?.sourceIn, currentPreview?.start, playing]);
+    const activeMedia = [...activeVisualClips, ...activeAudioClips]
+      .filter(c => c.kind === "video" || c.kind === "audio");
+    activeMedia.forEach(clip => {
+      const element = mediaRefs.current.get(clip.id);
+      if (!element) return;
+      const target = Math.max(0, clip.sourceIn + playhead - clip.start);
+      const threshold = playing && clip.id !== clockClip?.id ? 0.35 : 0.08;
+      if ((!playing || clip.id !== clockClip?.id) && Math.abs(element.currentTime - target) > threshold) {
+        try { element.currentTime = Math.min(target, Number.isFinite(element.duration) ? element.duration : target); } catch { /* Metadata may not be ready yet. */ }
+      }
+      element.volume = Math.max(0, Math.min(1, clip.volume ?? 1));
+      if (playing && element.paused) {
+        void element.play().catch(() => setNotice("Salah satu media tidak dapat diputar. Periksa format atau codec file tersebut."));
+      } else if (!playing && !element.paused) {
+        element.pause();
+      }
+    });
+  }, [playhead, playing, activeMediaKey, clockClip?.id]);
 
   useEffect(() => {
     if (active && playhead < active.start) setPlayhead(active.start);
@@ -376,25 +394,21 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const togglePlayback = () => {
     if (playing) {
       setPlaying(false);
-      previewRef.current?.pause();
-      audioRef.current?.pause();
+      mediaRefs.current.forEach(element => element.pause());
       return;
     }
-    if (currentPreview?.kind === "video" && previewRef.current) {
-      void previewRef.current.play().then(() => setPlaying(true)).catch(() => {
-        setNotice("Video belum dapat diputar. Periksa format atau codec file media.");
-      });
+    const activeMedia = [...activeVisualClips, ...activeAudioClips]
+      .filter(c => c.kind === "video" || c.kind === "audio");
+    const elements = activeMedia.map(c => mediaRefs.current.get(c.id)).filter((el): el is HTMLMediaElement => !!el);
+    if (!elements.length) {
+      setPlaying(true);
       return;
     }
-    if (currentPreview?.kind === "audio" && audioRef.current) {
-      void audioRef.current.play().then(() => setPlaying(true)).catch(() => {
-        setNotice("Audio belum dapat diputar. Periksa format file media.");
-      });
-      return;
-    }
-    setPlaying(true);
+    Promise.all(elements.map(element => element.play())).then(() => setPlaying(true)).catch(() => {
+      elements.forEach(element => element.pause());
+      setNotice("Media belum dapat diputar bersama. Periksa format atau codec file media.");
+    });
   };
-
 
   const previewTime = currentPreview ? Math.max(0, currentPreview.sourceIn + playhead - currentPreview.start) : 0;
   const trackEnd = (track: number) => clips.filter(c => c.track === track).reduce((m,c) => Math.max(m,c.start+c.duration), 0);
@@ -484,14 +498,50 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
           <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><span>{aspectRatio}</span><span>FIT</span></div></div>
           <div className="preview-stage">
             {!currentPreview && <div className="preview-empty"><div className="preview-logo"><Clapperboard size={30}/></div><strong>Your story starts here</strong><span>Import a clip and select it in the timeline</span></div>}
-            {currentPreview?.kind === "video" && <video ref={previewRef} src={currentPreview.src} className="preview-media" controls={false} onLoadedMetadata={e => {
-              const d = e.currentTarget.duration;
-              if (Number.isFinite(d) && d > 0 && currentPreview.sourceIn === 0) updateClip(currentPreview.id,{duration:d});
-            }} onTimeUpdate={e => {
-              if (playing && currentPreview) setPlayhead(currentPreview.start + e.currentTarget.currentTime - currentPreview.sourceIn);
-            }} onEnded={() => { setPlaying(false); setPlayhead(currentPreview.start + currentPreview.duration); }} />}
-            {currentPreview?.kind === "image" && <img src={currentPreview.src} className="preview-media image-preview" />}
-            {currentPreview?.kind === "audio" && <div className="audio-preview"><div className="audio-art"><AudioLines size={52}/></div><strong>{currentPreview.name}</strong><span>Audio preview</span><audio ref={audioRef} src={currentPreview.src} controls onTimeUpdate={e => { if (playing) setPlayhead(currentPreview.start + e.currentTarget.currentTime - currentPreview.sourceIn); }} onEnded={() => setPlaying(false)} /></div>}
+            {activeVisualClips.map(clip => clip.kind === "video" ? (
+              <video key={clip.id} ref={element => {
+                if (element) mediaRefs.current.set(clip.id, element);
+                else mediaRefs.current.delete(clip.id);
+              }} src={clip.src} className="preview-media preview-layer" style={{ zIndex: clip.track + 1 }}
+                muted={false} playsInline preload="auto"
+                onLoadedMetadata={e => {
+                  const d = e.currentTarget.duration;
+                  if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                }}
+                onTimeUpdate={e => {
+                  if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
+                }}
+                onEnded={() => {
+                  if (clockClip?.id === clip.id) {
+                    const end = clip.start + clip.duration;
+                    setPlayhead(end);
+                    if (end >= duration - 0.05) setPlaying(false);
+                  }
+                }} />
+            ) : (
+              <img key={clip.id} src={clip.src} className="preview-media preview-layer image-preview" style={{ zIndex: clip.track + 1 }} alt={clip.name}/>
+            ))}
+            {activeAudioClips.map(clip => (
+              <audio key={clip.id} ref={element => {
+                if (element) mediaRefs.current.set(clip.id, element);
+                else mediaRefs.current.delete(clip.id);
+              }} src={clip.src} preload="auto"
+                onLoadedMetadata={e => {
+                  const d = e.currentTarget.duration;
+                  if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                }}
+                onTimeUpdate={e => {
+                  if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
+                }}
+                onEnded={() => {
+                  if (clockClip?.id === clip.id) {
+                    const end = clip.start + clip.duration;
+                    setPlayhead(end);
+                    if (end >= duration - 0.05) setPlaying(false);
+                  }
+                }} />
+            ))}
+            {!activeVisualClips.length && activeAudioClips.length > 0 && <div className="audio-preview"><div className="audio-art"><AudioLines size={52}/></div><strong>{activeAudioClips.length === 1 ? activeAudioClips[0].name : `${activeAudioClips.length} audio tracks`}</strong><span>Audio preview</span></div>}
           </div>
           <div className="transport">
             <span className="timecode">{fmt(playhead)}</span><div className="transport-controls"><button className="transport-btn" onClick={() => setPlayhead(0)} title="Go to start">|◀</button><button className="play-btn" onClick={togglePlayback}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button className="transport-btn" onClick={() => setPlayhead(Math.min(duration,playhead+5))} title="Forward 5 seconds">▶|</button></div><span className="timecode muted">{fmt(duration)}</span>
