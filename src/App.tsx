@@ -662,7 +662,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               }:item));
             } else {
               const candidate=Math.max(drag.originalStart+0.1,drag.originalStart+drag.originalDuration+dx/scale);
-              const nextEnd=snapTime(drag.id,candidate);
+              const snapPoints=[playhead,...clips.filter(item=>item.id!==drag.id).flatMap(item=>[item.start,item.start+item.duration])];
+              let nextEnd=candidate,snapDistance=0.18;
+              snapPoints.forEach(point=>{const delta=Math.abs(point-candidate);if(delta<snapDistance){snapDistance=delta;nextEnd=point;}});
               setClips(old=>old.map(item=>item.id===drag.id?{...item,duration:Math.max(0.1,nextEnd-drag.originalStart)}:item));
             }
           }} onPointerUp={e=>{
