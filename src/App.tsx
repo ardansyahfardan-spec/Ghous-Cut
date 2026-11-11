@@ -521,6 +521,7 @@ export default function App() {
     projectName={activeProject.name}
     aspectRatio={activeProject.aspectRatio || "16:9"}
     onBack={async () => { await refreshProjects(); setScreen("library"); }}
+    onExportProject={exportProject}
   />;
 
   return <main className="project-library">
