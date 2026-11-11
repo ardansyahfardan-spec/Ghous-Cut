@@ -37,6 +37,9 @@
       "msi"
     ],
     "shortDescription": "A Windows-first desktop video editor",
-    "longDescription": "An open-source video editing application built with Tauri, React and FFmpeg."
+    "longDescription": "An open-source video editing application built with Tauri, React and FFmpeg.",
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }
