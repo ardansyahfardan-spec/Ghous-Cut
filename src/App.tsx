@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { loadLocalProject, saveLocalProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
@@ -40,11 +41,32 @@ export default function App() {
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
-  const [browserFiles, setBrowserFiles] = useState<File[]>([]);
+  const [projectReady, setProjectReady] = useState(false);
   const previewRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = "__TAURI_INTERNALS__" in window;
+
+  useEffect(() => {
+    let alive = true;
+    loadLocalProject<Clip>().then(project => {
+      if (!alive || !project) return;
+      const restored = project.clips.map(c => ({
+        ...c,
+        src: c.file ? URL.createObjectURL(c.file) : (isDesktop ? convertFileSrc(c.path) : c.src)
+      }));
+      setClips(restored);
+      setNotice("Local project restored from this device.");
+    }).catch(() => {
+      if (alive) setNotice("Local project storage is unavailable in this browser.");
+    }).finally(() => { if (alive) setProjectReady(true); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!projectReady) return;
+    saveLocalProject(clips).catch(() => setNotice("Could not autosave this project in local browser storage."));
+  }, [clips, projectReady]);
 
   const active = clips.find(c => c.id === selected) || null;
   const activeAtPlayhead = clips.find(c => c.track === 0 && playhead >= c.start && playhead <= c.start + c.duration);
@@ -265,9 +287,9 @@ export default function App() {
     </main>
     <footer className="statusbar"><div><span className="status-led"/> {notice}</div><div><WandSparkles size={13}/> GHOUS CUT <span className="status-sep">|</span> LOCAL WORKSPACE</div></footer>
     <input ref={fileInputRef} type="file" multiple accept="video/*,audio/*,image/*" hidden onChange={e=>{
-      const files=Array.from(e.target.files||[]);setBrowserFiles(files);
+      const files=Array.from(e.target.files||[]);
       const urls=files.map(f=>URL.createObjectURL(f));
-      const newClips=files.map((f,i)=>({id:crypto.randomUUID(),name:f.name,path:f.name,src:urls[i],kind:kindFrom(f.name),track:kindFrom(f.name)==="audio"?2:kindFrom(f.name)==="image"?1:0,start:0,sourceIn:0,duration:10} as Clip));
+      const newClips=files.map((f,i)=>({id:crypto.randomUUID(),name:f.name,path:f.name,src:urls[i],file:f,kind:kindFrom(f.name),track:kindFrom(f.name)==="audio"?2:kindFrom(f.name)==="image"?1:0,start:0,sourceIn:0,duration:10} as Clip));
       setClips(old=>[...old,...newClips]);if(newClips[0])setSelected(newClips[0].id);setNotice("Browser preview mode. Run the Windows app for FFmpeg export.");
       e.currentTarget.value="";
     }}/>
