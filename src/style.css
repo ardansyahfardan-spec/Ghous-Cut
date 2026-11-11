@@ -579,3 +579,23 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
   .timeline-toolbar { touch-action: pan-x; }
   .edit-tools { min-width: max-content; }
 }
+
+
+/* The project library remains vertically scrollable on phones in either orientation. */
+html, body { min-height: 100%; }
+body { overflow-x: hidden; overflow-y: auto; }
+.project-library {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: visible;
+  touch-action: pan-y;
+  overscroll-behavior-y: auto;
+}
+.library-content {
+  padding-bottom: max(80px, env(safe-area-inset-bottom));
+}
+@media (max-width: 760px) {
+  body { min-width: 0; overflow-x: hidden; overflow-y: auto; }
+  .project-library { min-height: 100svh; min-height: 100dvh; }
+  .library-content { padding-top: 30px; padding-bottom: max(56px, env(safe-area-inset-bottom)); }
+}
