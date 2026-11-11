@@ -47,6 +47,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
   const touchDrag = useRef<{ id: string; startX: number; originalStart: number; track: number; moved: boolean } | null>(null);
+  const scrubbing = useRef(false);
   const [projectReady, setProjectReady] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const mediaRefs = useRef<Map<string, HTMLMediaElement>>(new Map());
@@ -619,15 +620,31 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
           <div className="timeline-scroll">
             <div className="timeline-ruler-wrap">
               <div className="track-label-spacer"/>
-              <div className="ruler" style={{width:Math.max(800,duration*scale)}} onClick={e=>{
-                const r=e.currentTarget.getBoundingClientRect();setPlayhead(Math.max(0,(e.clientX-r.left)/scale));
-              }}>
+              <div className="ruler" style={{width:Math.max(800,duration*scale)}} onPointerDown={e=>{
+                scrubbing.current=true;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const r=e.currentTarget.getBoundingClientRect();
+                setPlayhead(Math.max(0,Math.min(duration,(e.clientX-r.left)/scale)));
+              }} onPointerMove={e=>{
+                if(!scrubbing.current) return;
+                const r=e.currentTarget.getBoundingClientRect();
+                setPlayhead(Math.max(0,Math.min(duration,(e.clientX-r.left)/scale)));
+              }} onPointerUp={e=>{
+                scrubbing.current=false;
+                if(e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+              }} onPointerCancel={()=>{scrubbing.current=false;}}>
                 {Array.from({length:Math.ceil(duration/5)+1},(_,i)=><span key={i} className="ruler-tick" style={{left:i*5*scale}}>{fmt(i*5)}</span>)}
               </div>
             </div>
             {TRACKS.map(t => <div className="track-row" key={t.id}>
               <div className="track-label"><t.icon size={15}/><div><strong>{t.name}</strong><small>{t.hint}</small></div></div>
-              <div className="track-lane" data-track={t.id} style={{width:Math.max(800,duration*scale)}} onDragOver={e=>e.preventDefault()} onDrop={e=>{
+              <div className="track-lane" data-track={t.id} style={{width:Math.max(800,duration*scale),backgroundSize:scale+"px 100%"}} onClick={e=>{
+                if(e.target===e.currentTarget){
+                  const r=e.currentTarget.getBoundingClientRect();
+                  setPlayhead(Math.max(0,Math.min(duration,(e.clientX-r.left)/scale)));
+                  setSelected(null);
+                }
+              }} onDragOver={e=>e.preventDefault()} onDrop={e=>{
                 e.preventDefault();if(dragging)moveClip(dragging,t.id,Math.max(0,(e.clientX-e.currentTarget.getBoundingClientRect().left)/scale));
               }}>
                 {clips.filter(c=>c.track===t.id).map(c=><div key={c.id} draggable onDragStart={()=>setDragging(c.id)} onDragEnd={()=>setDragging(null)}
