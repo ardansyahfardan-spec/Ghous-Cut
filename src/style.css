@@ -599,3 +599,27 @@ body { overflow-x: hidden; overflow-y: auto; }
   .project-library { min-height: 100svh; min-height: 100dvh; }
   .library-content { padding-top: 30px; padding-bottom: max(56px, env(safe-area-inset-bottom)); }
 }
+
+
+/* Make the home project list its own scroll container on mobile landscape.
+   The editor intentionally locks the document viewport, so the library must scroll internally. */
+@media (max-width: 900px) and (orientation: landscape) {
+  .project-library {
+    display: block;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+  .library-content {
+    height: auto;
+    min-height: calc(100% - 68px);
+    padding-bottom: max(64px, env(safe-area-inset-bottom));
+  }
+}
