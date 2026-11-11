@@ -11,7 +11,7 @@ import {
 type MediaKind = "video" | "image" | "audio";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
-  track: number; start: number; sourceIn: number; duration: number;
+  track: number; start: number; sourceIn: number; duration: number; file?: File;
 };
 const SCALE = 54;
 const TRACKS = [
