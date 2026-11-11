@@ -231,7 +231,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       };
     });
     updateTimeline(old => [...old, ...newClips]);
-    if (newClips[0]) { setSelected(newClips[0].id); setPlayhead(newClips[0].start); }
+    if (newClips[0]) { setSelected(newClips[0].id); setSelectedIds([newClips[0].id]); setPlayhead(newClips[0].start); }
     setNotice(`Imported ${newClips.length} media file(s).`);
   };
 
@@ -280,7 +280,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     }
     updateTimeline(old => [...old.map(c => relinked.get(c.id) ?? c), ...additions]);
     const first = [...relinked.values(), ...additions][0];
-    if (first) { setSelected(first.id); setPlayhead(first.start); }
+    if (first) { setSelected(first.id); setSelectedIds([first.id]); setPlayhead(first.start); }
     const relinkCount = relinked.size;
     setNotice(`${relinkCount} media relinked · ${additions.length} new media added.`);
   };
@@ -308,7 +308,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt
     };
     updateTimeline(old => old.flatMap(c => c.id === active.id ? [{ ...c, duration: cutAt }, right] : [c]));
-    setSelected(right.id);
+    setSelected(right.id);setSelectedIds([right.id]);
     setNotice("Clip split at playhead.");
   };
 
@@ -331,7 +331,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       const right = rightById.get(c.id);
       return right ? [{ ...c, duration: playhead - c.start }, right] : [c];
     }));
-    setSelected(rightClips[0].id);
+    setSelected(rightClips[0].id);setSelectedIds(rightClips.map(c=>c.id));
     setNotice(`Split all tracks: ${rightClips.length} clip(s) cut at playhead.`);
   };
 
@@ -475,7 +475,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       if (mod && event.key.toLowerCase() === "x") { event.preventDefault(); cutSelected(); return; }
       if (mod && event.key.toLowerCase() === "v") { event.preventDefault(); pasteClip(); return; }
       if (mod && event.key.toLowerCase() === "d") { event.preventDefault(); duplicateSelected(); return; }
-      if (mod && event.key.toLowerCase() === "a") { event.preventDefault(); setSelectedIds(clips.map(c=>c.id)); if(clips[0])setSelected(clips[0].id); return; }
+      if (mod && event.key.toLowerCase() === "a") { event.preventDefault(); setSelectedIds(clips.map(c=>c.id)); setSelected(clips[0]?.id ?? null); return; }
       if (mod && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom(v => Math.min(1.8, Math.round((v + 0.1) * 10) / 10)); return; }
       if (mod && event.key === "-") { event.preventDefault(); setZoom(v => Math.max(0.6, Math.round((v - 0.1) * 10) / 10)); return; }
       if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
@@ -654,7 +654,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                 if(e.target===e.currentTarget){
                   const r=e.currentTarget.getBoundingClientRect();
                   setPlayhead(Math.max(0,Math.min(duration,(e.clientX-r.left)/scale)));
-                  setSelected(null);
+                  setSelected(null);setSelectedIds([]);
                 }
               }} onDragOver={e=>e.preventDefault()} onDrop={e=>{
                 e.preventDefault();if(dragging)moveClip(dragging,t.id,Math.max(0,(e.clientX-e.currentTarget.getBoundingClientRect().left)/scale));
