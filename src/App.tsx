@@ -802,7 +802,6 @@ export default function App() {
   const [draftName, setDraftName] = useState("");
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
-  const [phonePortrait, setPhonePortrait] = useState(false);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
 
   const exportProject = async (project: StoredProject<Clip>) => {
@@ -837,14 +836,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 900px) and (orientation: portrait)");
-    const update = () => setPhonePortrait(media.matches);
-    update();
-    media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
-  }, []);
-
-  useEffect(() => {
     let alive = true;
     const timer = window.setTimeout(async () => {
       try {
@@ -857,15 +848,6 @@ export default function App() {
     }, 1250);
     return () => { alive = false; window.clearTimeout(timer); };
   }, []);
-
-  const requestLibraryLandscape = async () => {
-    try {
-      const root = document.documentElement as HTMLElement & { requestFullscreen?: () => Promise<void> };
-      if (!document.fullscreenElement && root.requestFullscreen) await root.requestFullscreen();
-      const orientation = window.screen.orientation as (ScreenOrientation & { lock?: (value: "landscape") => Promise<void> }) | undefined;
-      await orientation?.lock?.("landscape");
-    } catch { /* The user can rotate manually on browsers that disallow screen locking. */ }
-  };
 
   const startProject = async () => {
     const name = draftName.trim() || "Proyek Tanpa Judul";
@@ -955,7 +937,6 @@ export default function App() {
   />;
 
   return <main className="project-library">
-    {phonePortrait && <div className="library-orientation-gate"><div className="orientation-card"><div className="orientation-icon"><Smartphone size={38}/><RotateCw size={22}/></div><span className="library-kicker">GHOUS CUT · MOBILE</span><h1>Putar perangkat Anda</h1><p>Beranda dan editor Ghous Cut dirancang untuk digunakan dalam posisi landscape di HP.</p><button className="new-project-button" onClick={() => void requestLibraryLandscape()}><RotateCw size={16}/> Coba landscape</button><small>Jika layar tidak berputar, matikan kunci rotasi lalu putar HP ke samping.</small></div></div>}
     <header className="library-topbar">
       <div className="library-brand"><span className="library-mark"><BrandLogo size={32}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
       <div className="library-account"><span className="library-online"/><span>Local workspace</span></div>
