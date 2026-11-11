@@ -720,7 +720,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                 </div>)}
               </div>
             </div>)}
-            <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
+            <div className="playhead" style={{left:`calc(var(--track-label-width, 116px) + ${playhead*scale}px)`}}><div className="playhead-cap"/><div className="playhead-line"/></div>
           </div>
           <div className="mobile-edit-dock" aria-label="Editing tools">
             <button className="mobile-tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Split size={17}/><span>Split all</span></button>
