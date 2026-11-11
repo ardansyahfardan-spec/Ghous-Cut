@@ -12,7 +12,7 @@ type MediaKind = "video" | "image" | "audio";
 type ProjectAspectRatio = "16:9" | "9:16" | "1:1";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
-  track: number; start: number; sourceIn: number; duration: number; volume?: number; file?: File;
+  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; file?: File;
 };
 const SCALE = 54;
 const TRACKS = [
@@ -374,8 +374,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       if (!output) return;
       setExporting(true);
       setNotice("Rendering seluruh timeline multitrack dengan FFmpeg…");
-      const exportClips = clips.map(({ id, name, path, kind, track, start, sourceIn, duration, volume }) => ({
-        id, name, path, kind, track, start, sourceIn, duration, volume: volume ?? 1
+      const exportClips = clips.map(({ id, name, path, kind, track, start, sourceIn, duration, volume, opacity }) => ({
+        id, name, path, kind, track, start, sourceIn, duration, volume: volume ?? 1, opacity: opacity ?? 1
       }));
       const result = await invoke<string>("export_timeline", {
         clips: exportClips,
@@ -502,7 +502,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               <video key={clip.id} ref={element => {
                 if (element) mediaRefs.current.set(clip.id, element);
                 else mediaRefs.current.delete(clip.id);
-              }} src={clip.src} className="preview-media preview-layer" style={{ zIndex: clip.track + 1 }}
+              }} src={clip.src} className="preview-media preview-layer" style={{ zIndex: clip.track + 1, opacity: clip.opacity ?? 1 }}
                 muted={false} playsInline preload="auto"
                 onLoadedMetadata={e => {
                   const target = Math.max(0, clip.sourceIn + playhead - clip.start);
@@ -624,7 +624,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         {active ? <div className="inspector-content">
           <div className="selected-file"><div className={`selected-file-icon ${active.kind}`}>{active.kind==="video"?<Video/>:active.kind==="image"?<ImageIcon/>:<Music2/>}</div><strong>{active.name}</strong><small>{active.kind.toUpperCase()} CLIP</small></div>
           <div className="property-group"><label>POSITION ON TIMELINE</label><div className="property-input"><span>Start</span><strong>{fmt(active.start)}</strong></div><div className="property-input"><span>Duration</span><strong>{fmt(active.duration)}</strong></div><div className="property-input"><span>Track</span><strong>{TRACKS.find(t=>t.id===active.track)?.name}</strong></div></div>
-          <div className="property-group"><label>AUDIO LEVEL</label><div className="property-input"><span>Clip volume</span><strong>{Math.round((active.volume ?? 1) * 100)}%</strong></div><input aria-label="Clip volume" type="range" min="0" max="1" step="0.01" value={active.volume ?? 1} onChange={e=>updateClip(active.id,{volume:Number(e.target.value)})} style={{width:"100%"}}/><button className="wide-action" onClick={()=>updateClip(active.id,{volume:0})}>Mute clip</button><button className="wide-action" onClick={()=>updateClip(active.id,{volume:1})}>Reset volume</button></div><div className="property-group"><label>TRIM RANGE</label><div className="property-input"><span>Source in</span><strong>{fmt(active.sourceIn)}</strong></div><div className="property-input"><span>Source out</span><strong>{fmt(active.sourceIn+active.duration)}</strong></div><p className="helper-text">Use the trim buttons above the timeline at the playhead position.</p></div>
+          <div className="property-group"><label>AUDIO LEVEL</label><div className="property-input"><span>Clip volume</span><strong>{Math.round((active.volume ?? 1) * 100)}%</strong></div><input aria-label="Clip volume" type="range" min="0" max="1" step="0.01" value={active.volume ?? 1} onChange={e=>updateClip(active.id,{volume:Number(e.target.value)})} style={{width:"100%"}}/><button className="wide-action" onClick={()=>updateClip(active.id,{volume:0})}>Mute clip</button><button className="wide-action" onClick={()=>updateClip(active.id,{volume:1})}>Reset volume</button></div>
+          {active.kind !== "audio" && <div className="property-group"><label>VIDEO OPACITY</label><div className="property-input"><span>Opacity</span><strong>{Math.round((active.opacity ?? 1) * 100)}%</strong></div><input aria-label="Video opacity" type="range" min="0" max="1" step="0.01" value={active.opacity ?? 1} onChange={e=>updateClip(active.id,{opacity:Number(e.target.value)})} style={{width:"100%"}}/><button className="wide-action" onClick={()=>updateClip(active.id,{opacity:1})}>Reset opacity</button></div>}<div className="property-group"><label>TRIM RANGE</label><div className="property-input"><span>Source in</span><strong>{fmt(active.sourceIn)}</strong></div><div className="property-input"><span>Source out</span><strong>{fmt(active.sourceIn+active.duration)}</strong></div><p className="helper-text">Use the trim buttons above the timeline at the playhead position.</p></div>
           <div className="property-group"><label>QUICK ACTIONS</label><button className="wide-action" onClick={()=>{setPlayhead(active.start);setNotice("Playhead moved to clip start.");}}>Go to clip start</button><button className="wide-action" onClick={()=>{setPlayhead(active.start+active.duration);setNotice("Playhead moved to clip end.");}}>Go to clip end</button></div>
         </div> : <div className="inspector-empty"><MousePointer2 size={24}/><strong>Nothing selected</strong><span>Select a clip to inspect its properties</span></div>}
         <div className="ai-card"><div className="ai-card-title"><Sparkles size={15}/><strong>Audio enhancement</strong><span className="beta-pill">BETA</span></div><p>Reduce steady background noise in your exported video using FFmpeg denoising.</p><label className="toggle-row"><span><Volume2 size={15}/> Noise reduction</span><input type="checkbox" checked={denoise} onChange={e=>setDenoise(e.target.checked)}/><i/></label></div>
