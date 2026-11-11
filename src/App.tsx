@@ -473,7 +473,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       </div>
     </div>}
     <header className="topbar">
-      <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><GhostMark size={21}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
+      <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><BrandLogo size={22}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
       <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)"><Keyboard size={15}/> Shortcuts</button><button className="btn ghost" onClick={importMedia}><FolderOpen size={15}/> Import</button><button className="btn ghost" onClick={() => void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() })}><Download size={15}/> Save Project</button><button className="btn primary" onClick={exportVideo} disabled={exporting}><Download size={15}/>{exporting ? "Rendering…" : "Export"}</button></div>
     </header>
@@ -660,6 +660,19 @@ function GhostMark({ size = 28 }: { size?: number }) {
   </svg>;
 }
 
+function BrandLogo({ size = 28 }: { size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <GhostMark size={size}/>;
+  return <img
+    className="brand-logo-image"
+    src="/assets/ghous-cut-logo.png"
+    width={size}
+    height={size}
+    alt="Ghous Cut"
+    onError={() => setFailed(true)}
+  />;
+}
+
 export default function App() {
   const [screen, setScreen] = useState<"splash" | "library" | "editor">("splash");
   const [projects, setProjects] = useState<ProjectCard[]>([]);
@@ -806,7 +819,7 @@ export default function App() {
 
   if (screen === "splash") return <main className="splash-screen">
     <div className="splash-glow"/>
-    <div className="splash-brand-mark"><GhostMark size={76}/></div>
+    <div className="splash-brand-mark"><BrandLogo size={88}/></div>
     <div className="splash-title">GHOUS <span>CUT</span></div>
     <div className="splash-subtitle">VIDEO EDITOR</div>
     <div className="splash-loading"><i/></div>
@@ -825,7 +838,7 @@ export default function App() {
   return <main className="project-library">
     {phonePortrait && <div className="library-orientation-gate"><div className="orientation-card"><div className="orientation-icon"><Smartphone size={38}/><RotateCw size={22}/></div><span className="library-kicker">GHOUS CUT · MOBILE</span><h1>Putar perangkat Anda</h1><p>Beranda dan editor Ghous Cut dirancang untuk digunakan dalam posisi landscape di HP.</p><button className="new-project-button" onClick={() => void requestLibraryLandscape()}><RotateCw size={16}/> Coba landscape</button><small>Jika layar tidak berputar, matikan kunci rotasi lalu putar HP ke samping.</small></div></div>}
     <header className="library-topbar">
-      <div className="library-brand"><span className="library-mark"><GhostMark size={25}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
+      <div className="library-brand"><span className="library-mark"><BrandLogo size={32}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
       <div className="library-account"><span className="library-online"/><span>Local workspace</span></div>
     </header>
     <section className="library-content">
