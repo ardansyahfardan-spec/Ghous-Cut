@@ -409,3 +409,21 @@ kbd { background: #292a23; border-color: #625a47; color: var(--gc-cream-strong);
 .orientation-icon { color:var(--gc-red-soft); }
 .orientation-action { background:var(--gc-red); color:#fff7ef; }
 button:focus-visible { outline-color:var(--gc-red-soft); }
+
+/* Use the official supplied logo in project-list placeholders as well. */
+.empty-ghost .brand-logo-image {
+  width: 62px;
+  height: 62px;
+  object-fit: contain;
+}
+.project-thumbnail > img.brand-logo-image {
+  position: relative;
+  inset: auto;
+  width: 76px;
+  height: 76px;
+  padding: 10px;
+  box-sizing: content-box;
+  object-fit: contain;
+  background: transparent;
+  filter: none;
+}
