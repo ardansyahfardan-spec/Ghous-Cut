@@ -202,6 +202,19 @@ type PortableClip = { id?: string; name?: string; src?: string; file?: File; [ke
 const safeProjectName = (name: string) =>
   name.replace(/[\\/:*?"<>|]/g, "-").trim() || "Ghous-Cut-Project";
 
+const mediaMimeType = (name = "") => {
+  const extension = name.split(".").pop()?.toLowerCase() || "";
+  const types: Record<string, string> = {
+    mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+    mkv: "video/x-matroska", avi: "video/x-msvideo",
+    mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4", aac: "audio/aac",
+    flac: "audio/flac", ogg: "audio/ogg",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+    gif: "image/gif", bmp: "image/bmp"
+  };
+  return types[extension] || "application/octet-stream";
+};
+
 async function browserMediaBytes(clip: PortableClip): Promise<Uint8Array | null> {
   if (clip.file instanceof File) return new Uint8Array(await clip.file.arrayBuffer());
   if (clip.src?.startsWith("blob:")) {
@@ -305,7 +318,8 @@ export async function importProjectFile(file: File): Promise<StoredProject> {
         const extension = item.name?.split(".").pop()?.toLowerCase() || "bin";
         const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);
         new Uint8Array(mediaBuffer).set(mediaBytes);
-        const mediaFile = new File([mediaBuffer], item.name || `media.${extension}`);
+        const mediaName = item.name || `media.${extension}`;
+        const mediaFile = new File([mediaBuffer], mediaName, { type: mediaMimeType(mediaName) });
         return { ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined };
       }
       return { ...item, src: "", file: undefined };
