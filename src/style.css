@@ -517,3 +517,65 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
   .timeline-clip { cursor: grab; }
   .timeline-clip:active { cursor: grabbing; }
 }
+
+
+/* Mobile-first touch targets and direct clip edge trimming */
+.timeline-scroll {
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+.timeline-ruler-wrap, .ruler { touch-action: none; }
+.timeline-ruler-wrap { user-select: none; -webkit-user-select: none; }
+.track-lane { touch-action: pan-x pan-y; }
+.timeline-clip {
+  position: absolute;
+  min-width: 66px;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+.clip-thumb, .clip-name, .clip-duration { pointer-events: none; }
+.clip-trim-handle {
+  position: absolute;
+  z-index: 2;
+  top: -1px;
+  bottom: -1px;
+  width: 14px;
+  display: block;
+  touch-action: none;
+  cursor: ew-resize;
+  background: transparent;
+}
+.clip-trim-start { left: -1px; border-radius: 5px 0 0 5px; }
+.clip-trim-end { right: -1px; border-radius: 0 5px 5px 0; }
+.clip-trim-handle::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: .7;
+}
+@media (pointer: coarse) {
+  .timeline-clip { min-height: 38px; }
+  .clip-trim-handle { width: 20px; }
+  .clip-trim-start::after { left: 8px; }
+  .clip-trim-end::after { left: 10px; }
+  .timeline-toolbar, .edit-tools, .asset-list, .inspector-content {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  button, input[type="range"] { touch-action: manipulation; }
+}
+@media (max-width: 760px) and (orientation: landscape) {
+  .timeline-panel { min-width: 0; }
+  .timeline-scroll { touch-action: pan-x pan-y; }
+  .timeline-clip { padding-left: 18px; padding-right: 18px; }
+  .clip-trim-handle { width: 22px; }
+  .timeline-toolbar { touch-action: pan-x; }
+  .edit-tools { min-width: max-content; }
+}
