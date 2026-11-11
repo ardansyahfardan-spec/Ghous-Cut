@@ -615,9 +615,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               <button className="tool-btn" onClick={trimRight} title="Trim end to playhead">◨<span>Trim right</span></button>
               <button className="tool-btn danger-tool" onClick={removeSelected} title="Remove selected clip"><Trash2 size={15}/></button>
             </div>
-            <div className="zoom-control"><span>−</span><input aria-label="Timeline zoom" type="range" min="0.6" max="1.8" step="0.1" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/><span>+</span></div>
+            <div className="zoom-control"><button type="button" className="zoom-step" aria-label="Zoom out timeline" onClick={()=>setZoom(v=>Math.max(0.6,Math.round((v-0.1)*10)/10))}>−</button><input aria-label="Timeline zoom" type="range" min="0.6" max="1.8" step="0.1" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/><button type="button" className="zoom-step" aria-label="Zoom in timeline" onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+0.1)*10)/10))}>+</button><button type="button" className="zoom-reset" onClick={()=>setZoom(1)} title="Reset zoom">100%</button></div>
           </div>
-          <div className="timeline-scroll">
+          <div className="timeline-scroll" onWheel={e=>{
+            if(!e.ctrlKey) return;
+            e.preventDefault();
+            setZoom(v=>Math.max(0.6,Math.min(1.8,Math.round((v+(e.deltaY<0?0.1:-0.1))*10)/10)));
+          }}>
             <div className="timeline-ruler-wrap">
               <div className="track-label-spacer"/>
               <div className="ruler" style={{width:Math.max(800,duration*scale)}} onPointerDown={e=>{
