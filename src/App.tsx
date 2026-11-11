@@ -6,7 +6,8 @@ import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
   Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Search, Clock3, ArrowLeft, Film as FilmIcon, Keyboard, Undo2, Redo2,
-  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX
+  Copy, ClipboardPaste, ClipboardX, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX,
+  Split, ArrowLeftToLine, ArrowRightToLine
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
@@ -48,6 +49,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [exporting, setExporting] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showMobileInspector, setShowMobileInspector] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -575,7 +577,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         <div className="timeline-panel panel">
           <div className="timeline-toolbar">
             <div className="timeline-title"><span className="eyebrow">EDIT</span><h2>Timeline</h2></div>
-            <div className="edit-tools">
+            <div className="portrait-primary-tools" aria-label="Quick editing tools"><button className="tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={16}/></button><button className="tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={16}/></button></div>
+             <div className="edit-tools">
               <button className="tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={16}/><span>Split</span></button>
               <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Scissors size={16}/><span>All</span></button>
               <button className="tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={16}/><span>Copy</span></button>
@@ -684,6 +687,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               }}>
                 {clips.filter(c=>c.track===t.id).map(c=><div key={c.id} draggable={false}
                   onDragStart={e=>e.preventDefault()}
+                  onContextMenu={e=>{ if(window.matchMedia("(pointer: fine)").matches){ e.preventDefault(); selectClip(c); setContextMenu({x:e.clientX,y:e.clientY,clipId:c.id}); } }}
                   onPointerDown={e=>{
                     if(e.button!==0) return;
                     e.preventDefault();
@@ -707,6 +711,15 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             </div>)}
             <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
           </div>
+          <div className="mobile-edit-dock" aria-label="Editing tools">
+            <button className="mobile-tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Split size={17}/><span>Split all</span></button>
+            <button className="mobile-tool-btn" onClick={cutSelected} title="Cut clips" aria-label="Cut clips"><ClipboardX size={17}/><span>Cut</span></button>
+            <button className="mobile-tool-btn" onClick={pasteClip} title="Paste clips" aria-label="Paste clips"><ClipboardPaste size={17}/><span>Paste</span></button>
+            <button className="mobile-tool-btn" onClick={duplicateSelected} title="Duplicate clip" aria-label="Duplicate clip"><CopyPlus size={17}/><span>Duplicate</span></button>
+            <button className="mobile-tool-btn" onClick={trimLeft} title="Trim start to playhead" aria-label="Trim start"><ArrowLeftToLine size={17}/><span>Trim in</span></button>
+            <button className="mobile-tool-btn" onClick={trimRight} title="Trim end to playhead" aria-label="Trim end"><ArrowRightToLine size={17}/><span>Trim out</span></button>
+            <button className="mobile-tool-btn danger-tool" onClick={removeSelected} title="Delete selected clips" aria-label="Delete selected clips"><Trash2 size={17}/><span>Delete</span></button>
+          </div>
           <div className="timeline-footer"><span><MousePointer2 size={12}/> Drag to arrange · Click ruler to seek · Space play · Ctrl+B split · Q/W trim · Del remove · Ctrl+Z undo</span><span>{selectedIds.length?selectedIds.length+" selected · ":""}{clips.length} clips · {fmt(duration)} workspace</span></div>
         </div>
       </section>
@@ -723,6 +736,20 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         <div className="ai-card"><div className="ai-card-title"><Sparkles size={15}/><strong>Audio enhancement</strong><span className="beta-pill">BETA</span></div><p>Reduce steady background noise in your exported video using FFmpeg denoising.</p><label className="toggle-row"><span><Volume2 size={15}/> Noise reduction</span><input type="checkbox" checked={denoise} onChange={e=>setDenoise(e.target.checked)}/><i/></label></div>
       </aside>
     </main>
+    {contextMenu && <div className="context-menu-layer" onPointerDown={()=>setContextMenu(null)}>
+      <div className="context-menu" role="menu" aria-label="Clip actions" style={{left:Math.min(contextMenu.x,window.innerWidth-224),top:Math.min(contextMenu.y,window.innerHeight-410)}} onPointerDown={e=>e.stopPropagation()}>
+        <div className="context-menu-heading">CLIP ACTIONS</div>
+        <button role="menuitem" onClick={()=>{setPlayhead(clips.find(c=>c.id===contextMenu.clipId)?.start ?? playhead);setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);}}><MousePointer2 size={15}/> Select clip</button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);splitSelected();}}><Scissors size={15}/> Split at playhead <kbd>Ctrl+B</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);copySelected();}}><Copy size={15}/> Copy <kbd>Ctrl+C</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);cutSelected();}}><ClipboardX size={15}/> Cut <kbd>Ctrl+X</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);duplicateSelected();}}><CopyPlus size={15}/> Duplicate <kbd>Ctrl+D</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);trimLeft();}}><ArrowLeftToLine size={15}/> Trim start to playhead</button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);trimRight();}}><ArrowRightToLine size={15}/> Trim end to playhead</button>
+        <div className="context-menu-divider"/>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);removeSelected();}} className="context-danger"><Trash2 size={15}/> Delete <kbd>Del</kbd></button>
+      </div>
+    </div>}
     {showShortcuts && <div className="shortcuts-backdrop" role="presentation" onClick={() => setShowShortcuts(false)}>
       <section className="shortcuts-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" onClick={e => e.stopPropagation()}>
         <header><div><span className="eyebrow">GHOUS CUT · EDITOR</span><h2 id="shortcuts-title">Keyboard shortcuts</h2></div><button className="icon-btn" onClick={() => setShowShortcuts(false)} aria-label="Close shortcuts"><X size={16}/></button></header>
