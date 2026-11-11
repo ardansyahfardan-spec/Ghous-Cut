@@ -458,3 +458,24 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
   border-color:var(--gc-red-soft); color:var(--gc-red-soft);
 }
 .zoom-control .zoom-reset { min-width:42px; font-size:9px; }
+
+
+/* Multi-selection and per-track controls */
+.timeline-clip.selected {
+  outline: 2px solid var(--gc-red-soft);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px #c94b4b22;
+}
+.track-label { position: relative; padding-right: 30px; }
+.track-mute {
+  position:absolute; right:5px; top:50%; transform:translateY(-50%);
+  width:20px; height:20px; padding:0; border:1px solid var(--gc-border);
+  border-radius:4px; background:var(--gc-surface-raised); color:var(--gc-muted);
+  font:700 9px 'DM Mono'; cursor:pointer;
+}
+.track-mute:hover { border-color:var(--gc-red-soft); color:var(--gc-red-soft); }
+.track-mute.muted { background:#472526; border-color:var(--gc-red); color:#ffd8d1; }
+@media (max-width: 760px) and (orientation: landscape) {
+  .track-label { padding-right:25px; }
+  .track-mute { right:3px; width:18px; height:18px; }
+}
