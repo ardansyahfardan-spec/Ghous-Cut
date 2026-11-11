@@ -665,7 +665,7 @@ function BrandLogo({ size = 28 }: { size?: number }) {
   if (failed) return <GhostMark size={size}/>;
   return <img
     className="brand-logo-image"
-    src="/logo%20ghous%20cut.png"
+    src={`${import.meta.env.BASE_URL}logo%20ghous%20cut.png`}
     width={size}
     height={size}
     alt="Ghous Cut"
