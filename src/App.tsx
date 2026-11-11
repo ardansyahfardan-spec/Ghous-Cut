@@ -127,19 +127,66 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack }: { proj
   }, [active?.id]);
 
   const addPaths = async (paths: string[]) => {
-    const newClips: Clip[] = paths.map((path, i) => {
+    const cursors = new Map<number, number>();
+    for (const clip of clips) {
+      cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
+    }
+    const newClips: Clip[] = paths.map(path => {
       const kind = kindFrom(path);
       const track = kind === "audio" ? 2 : kind === "image" ? 1 : 0;
-      const last = clips.filter(c => c.track === track).reduce((m, c) => Math.max(m, c.start + c.duration), 0);
+      const start = cursors.get(track) ?? 0;
+      const duration = kind === "image" ? 5 : 10;
+      cursors.set(track, start + duration);
       return {
         id: crypto.randomUUID(), name: basename(path), path,
         src: isDesktop ? convertFileSrc(path) : path,
-        kind, track, start: last + (i ? 0.25 * i : 0), sourceIn: 0, duration: kind === "image" ? 5 : 10, volume: 1
+        kind, track, start, sourceIn: 0, duration, volume: 1
       };
     });
     setClips(old => [...old, ...newClips]);
     if (newClips[0]) { setSelected(newClips[0].id); setPlayhead(newClips[0].start); }
     setNotice(`Imported ${newClips.length} media file(s).`);
+  };
+
+  const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number> => {
+    if (kind === "image") return Promise.resolve(5);
+    return new Promise(resolve => {
+      const media = document.createElement(kind === "audio" ? "audio" : "video");
+      media.preload = "metadata";
+      const finish = (duration: number) => {
+        media.removeAttribute("src");
+        media.load();
+        resolve(Number.isFinite(duration) && duration > 0 ? duration : 10);
+      };
+      media.onloadedmetadata = () => finish(media.duration);
+      media.onerror = () => finish(10);
+      media.src = src;
+    });
+  };
+
+  const addBrowserFiles = async (files: File[]) => {
+    const prepared = await Promise.all(files.map(async file => {
+      const kind = kindFrom(file.name);
+      const src = URL.createObjectURL(file);
+      const duration = await readBrowserMediaDuration(src, kind);
+      return { file, kind, src, duration };
+    }));
+    const cursors = new Map<number, number>();
+    for (const clip of clips) {
+      cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
+    }
+    const newClips: Clip[] = prepared.map(({ file, kind, src, duration }) => {
+      const track = kind === "audio" ? 2 : kind === "image" ? 1 : 0;
+      const start = cursors.get(track) ?? 0;
+      cursors.set(track, start + duration);
+      return {
+        id: crypto.randomUUID(), name: file.name, path: file.name, src, file,
+        kind, track, start, sourceIn: 0, duration, volume: 1
+      };
+    });
+    setClips(old => [...old, ...newClips]);
+    if (newClips[0]) { setSelected(newClips[0].id); setPlayhead(newClips[0].start); }
+    setNotice(`Imported ${newClips.length} media file(s). Durasi dibaca dari metadata lokal.`);
   };
 
   const importMedia = async () => {
@@ -333,9 +380,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack }: { proj
     <footer className="statusbar"><div><span className="status-led"/> {notice}</div><div><WandSparkles size={13}/> GHOUS CUT <span className="status-sep">|</span> LOCAL WORKSPACE</div></footer>
     <input ref={fileInputRef} type="file" multiple accept="video/*,audio/*,image/*" hidden onChange={e=>{
       const files=Array.from(e.target.files||[]);
-      const urls=files.map(f=>URL.createObjectURL(f));
-      const newClips=files.map((f,i)=>({id:crypto.randomUUID(),name:f.name,path:f.name,src:urls[i],file:f,kind:kindFrom(f.name),track:kindFrom(f.name)==="audio"?2:kindFrom(f.name)==="image"?1:0,start:0,sourceIn:0,duration:10,volume:1} as Clip));
-      setClips(old=>[...old,...newClips]);if(newClips[0])setSelected(newClips[0].id);setNotice("Browser preview mode. Run the Windows app for FFmpeg export.");
+      void addBrowserFiles(files).then(() => setNotice("Media tersimpan lokal. Browser preview mode; ekspor MP4 tersedia di aplikasi Windows."));
       e.currentTarget.value="";
     }}/>
   </div>;
