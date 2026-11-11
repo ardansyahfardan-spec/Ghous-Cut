@@ -11,6 +11,7 @@ export type StoredProject<T = any> = {
 };
 
 const browserProjects = new Map<string, StoredProject>();
+const projectSaveQueues = new Map<string, Promise<void>>();
 const isDesktop = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const sortRecent = (projects: StoredProject[]) => projects.sort((a, b) => b.updatedAt - a.updatedAt);
 
@@ -35,7 +36,10 @@ export async function saveProject<T>(id: string, name: string, clips: T[]): Prom
     updatedAt: Date.now()
   };
   if (isDesktop()) {
-    await invoke("save_project", { project });
+    const previous = projectSaveQueues.get(id) ?? Promise.resolve();
+    const next = previous.catch(() => undefined).then(() => invoke("save_project", { project }));
+    projectSaveQueues.set(id, next);
+    try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
   } else {
     browserProjects.set(id, project);
   }
