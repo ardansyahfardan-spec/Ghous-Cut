@@ -165,6 +165,7 @@ fn export_timeline(
         source_in: f64,
         duration: f64,
         volume: f64,
+        opacity: f64,
     }
 
     let mut timeline = Vec::<ClipInput>::new();
@@ -176,9 +177,11 @@ fn export_timeline(
         let source_in = clip.get("sourceIn").and_then(Value::as_f64).unwrap_or(0.0);
         let duration = clip.get("duration").and_then(Value::as_f64).unwrap_or(f64::NAN);
         let volume = clip.get("volume").and_then(Value::as_f64).unwrap_or(1.0);
+        let opacity = clip.get("opacity").and_then(Value::as_f64).unwrap_or(1.0);
         if path.trim().is_empty() || !start.is_finite() || !source_in.is_finite() ||
-            !duration.is_finite() || !volume.is_finite() || start < 0.0 ||
-            source_in < 0.0 || duration <= 0.0 || !(0.0..=1.0).contains(&volume) {
+            !duration.is_finite() || !volume.is_finite() || !opacity.is_finite() || start < 0.0 ||
+            source_in < 0.0 || duration <= 0.0 || !(0.0..=1.0).contains(&volume) ||
+            !(0.0..=1.0).contains(&opacity) {
             return Err(format!("Invalid timeline clip at index {index}."));
         }
         if !["video", "image", "audio"].contains(&kind.as_str()) || !(0..=2).contains(&track) {
@@ -187,7 +190,7 @@ fn export_timeline(
         if !std::path::Path::new(&path).exists() {
             return Err(format!("Media file not found: {path}"));
         }
-        timeline.push(ClipInput { index, path, kind, track, start, source_in, duration, volume });
+        timeline.push(ClipInput { index, path, kind, track, start, source_in, duration, volume, opacity });
     }
 
     if timeline.is_empty() { return Err("Import media and add clips to the timeline before exporting.".into()); }
@@ -219,8 +222,8 @@ fn export_timeline(
             let next_label = format!("base{}", video_index + 1);
             let clip_label = format!("v{}", clip.index);
             graph.push(format!(
-                "[{input_index}:v]setpts=PTS-STARTPTS,scale={width}:{height}:force_original_aspect_ratio=decrease,format=rgba,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,setsar=1,setpts=PTS+{:.3}/TB[{clip_label}]",
-                clip.start
+                "[{input_index}:v]setpts=PTS-STARTPTS,scale={width}:{height}:force_original_aspect_ratio=decrease,format=rgba,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black@0.0,colorchannelmixer=aa={:.3},setsar=1,setpts=PTS+{:.3}/TB[{clip_label}]",
+                clip.opacity, clip.start
             ));
             graph.push(format!(
                 "[{base_label}][{clip_label}]overlay=eof_action=pass:shortest=0:enable='between(t,{:.3},{:.3})'[{next_label}]",
