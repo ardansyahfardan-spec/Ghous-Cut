@@ -737,12 +737,15 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       </aside>
     </main>
     {contextMenu && <div className="context-menu-layer" onPointerDown={()=>setContextMenu(null)}>
-      <div className="context-menu" role="menu" aria-label="Clip actions" style={{left:Math.min(contextMenu.x,window.innerWidth-224),top:Math.min(contextMenu.y,window.innerHeight-330)}} onPointerDown={e=>e.stopPropagation()}>
+      <div className="context-menu" role="menu" aria-label="Clip actions" style={{left:Math.min(contextMenu.x,window.innerWidth-224),top:Math.min(contextMenu.y,window.innerHeight-410)}} onPointerDown={e=>e.stopPropagation()}>
         <div className="context-menu-heading">CLIP ACTIONS</div>
         <button role="menuitem" onClick={()=>{setPlayhead(clips.find(c=>c.id===contextMenu.clipId)?.start ?? playhead);setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);}}><MousePointer2 size={15}/> Select clip</button>
         <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);splitSelected();}}><Scissors size={15}/> Split at playhead <kbd>Ctrl+B</kbd></button>
         <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);copySelected();}}><Copy size={15}/> Copy <kbd>Ctrl+C</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);cutSelected();}}><ClipboardX size={15}/> Cut <kbd>Ctrl+X</kbd></button>
         <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);duplicateSelected();}}><CopyPlus size={15}/> Duplicate <kbd>Ctrl+D</kbd></button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);trimLeft();}}><ArrowLeftToLine size={15}/> Trim start to playhead</button>
+        <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);trimRight();}}><ArrowRightToLine size={15}/> Trim end to playhead</button>
         <div className="context-menu-divider"/>
         <button role="menuitem" onClick={()=>{setSelected(contextMenu.clipId);setSelectedIds([contextMenu.clipId]);setContextMenu(null);removeSelected();}} className="context-danger"><Trash2 size={15}/> Delete <kbd>Del</kbd></button>
       </div>
