@@ -104,11 +104,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const scale = SCALE * zoom;
   const selectedSrc = active?.src || activeAtPlayhead?.src || "";
 
+  // Let the browser's native media pipeline drive video/audio playback.
+  // A React timer that repeatedly seeks the video element causes dropped frames.
   useEffect(() => {
-    if (!playing) return;
-    const timer = window.setInterval(() => setPlayhead(v => v + 0.1), 100);
+    if (!playing || active?.kind === "video" || active?.kind === "audio") return;
+    const timer = window.setInterval(() => setPlayhead(v => Math.min(duration, v + 0.1)), 100);
     return () => window.clearInterval(timer);
-  }, [playing]);
+  }, [playing, active?.kind, duration]);
 
   useEffect(() => {
     if (previewRef.current) previewRef.current.volume = Math.max(0, Math.min(1, active?.volume ?? 1));
@@ -117,10 +119,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 
   useEffect(() => {
     const el = previewRef.current;
-    if (!el || !active || active.kind !== "video") return;
+    if (!el || !active || active.kind !== "video" || playing) return;
     const target = Math.max(0, active.sourceIn + playhead - active.start);
-    if (Math.abs(el.currentTime - target) > 0.45) el.currentTime = Math.min(target, Number.isFinite(el.duration) ? el.duration : target);
-  }, [playhead, active?.id]);
+    if (Math.abs(el.currentTime - target) > 0.08) {
+      el.currentTime = Math.min(target, Number.isFinite(el.duration) ? el.duration : target);
+    }
+  }, [playhead, active?.id, active?.sourceIn, active?.start, playing]);
 
   useEffect(() => {
     if (active && playhead < active.start) setPlayhead(active.start);
@@ -274,11 +278,21 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       setPlaying(false);
       previewRef.current?.pause();
       audioRef.current?.pause();
-    } else {
-      setPlaying(true);
-      if (active?.kind === "video") void previewRef.current?.play().catch(() => {});
-      if (active?.kind === "audio") void audioRef.current?.play().catch(() => {});
+      return;
     }
+    if (active?.kind === "video" && previewRef.current) {
+      void previewRef.current.play().then(() => setPlaying(true)).catch(() => {
+        setNotice("Video belum dapat diputar. Periksa format atau codec file media.");
+      });
+      return;
+    }
+    if (active?.kind === "audio" && audioRef.current) {
+      void audioRef.current.play().then(() => setPlaying(true)).catch(() => {
+        setNotice("Audio belum dapat diputar. Periksa format file media.");
+      });
+      return;
+    }
+    setPlaying(true);
   };
 
   const currentPreview = active || activeAtPlayhead;
@@ -327,9 +341,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               if (Number.isFinite(d) && d > 0 && currentPreview.sourceIn === 0) updateClip(currentPreview.id,{duration:d});
             }} onTimeUpdate={e => {
               if (playing && currentPreview) setPlayhead(currentPreview.start + e.currentTarget.currentTime - currentPreview.sourceIn);
-            }} onEnded={() => setPlaying(false)} />}
+            }} onEnded={() => { setPlaying(false); setPlayhead(currentPreview.start + currentPreview.duration); }} />}
             {currentPreview?.kind === "image" && <img src={currentPreview.src} className="preview-media image-preview" />}
-            {currentPreview?.kind === "audio" && <div className="audio-preview"><div className="audio-art"><AudioLines size={52}/></div><strong>{currentPreview.name}</strong><span>Audio preview</span><audio ref={audioRef} src={currentPreview.src} controls /></div>}
+            {currentPreview?.kind === "audio" && <div className="audio-preview"><div className="audio-art"><AudioLines size={52}/></div><strong>{currentPreview.name}</strong><span>Audio preview</span><audio ref={audioRef} src={currentPreview.src} controls onTimeUpdate={e => { if (playing) setPlayhead(currentPreview.start + e.currentTarget.currentTime - currentPreview.sourceIn); }} onEnded={() => setPlaying(false)} /></div>}
           </div>
           <div className="transport">
             <span className="timecode">{fmt(playhead)}</span><div className="transport-controls"><button className="transport-btn" onClick={() => setPlayhead(0)} title="Go to start">|◀</button><button className="play-btn" onClick={togglePlayback}>{playing?<Pause size={17}/>:<Play size={17} fill="currentColor"/>}</button><button className="transport-btn" onClick={() => setPlayhead(Math.min(duration,playhead+5))} title="Forward 5 seconds">▶|</button></div><span className="timecode muted">{fmt(duration)}</span>
