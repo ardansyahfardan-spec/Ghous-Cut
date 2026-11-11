@@ -43,7 +43,8 @@ fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
     let mut path = projects_directory(&app)?;
     path.push(format!("{id}.json"));
     let mut temporary = path.clone();
-    temporary.set_extension("json.tmp");
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+    temporary.set_extension(format!("{nonce}.tmp"));
     let content = serde_json::to_vec_pretty(&project).map_err(|e| e.to_string())?;
     fs::write(&temporary, content).map_err(|e| format!("Cannot write local project: {e}"))?;
     fs::rename(&temporary, &path).map_err(|e| format!("Cannot finalize local project: {e}"))?;
