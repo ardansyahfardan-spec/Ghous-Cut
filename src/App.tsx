@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
+import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
@@ -53,6 +53,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = "__TAURI_INTERNALS__" in window;
+  const hasLocalBrowserFilesystem = browserPersistenceAvailable();
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px) and (orientation: portrait)");
@@ -475,7 +476,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             <span className="asset-meta"><strong>{c.name}</strong><small>{c.kind.toUpperCase()} · {fmt(c.duration)}</small></span>
           </button>)}
         </div>
-        <div className="storage-note"><span className="storage-dot"/> {isDesktop ? "Local files · Saved on this PC" : "Session only · Save the .ghcut project file"}</div>
+        <div className="storage-note"><span className="storage-dot"/> {isDesktop ? "Local files · Saved on this PC" : hasLocalBrowserFilesystem ? "Local device files · .ghcut backup" : "Session only · Export .ghcut to keep projects"}</div>
       </aside>
 
       <section className="center-panel">
@@ -714,15 +715,16 @@ export default function App() {
 
   const duplicateProject = async (project: ProjectCard) => {
     const now = Date.now();
-    const duplicate: ProjectCard = {
-      ...project,
-      id: crypto.randomUUID(),
-      name: `${project.name} (Salinan)`,
-      clips: project.clips.map(clip => ({ ...clip, id: crypto.randomUUID() })),
-      createdAt: now,
-      updatedAt: now
-    };
     try {
+      const fullProject = await loadProject<Clip>(project.id) || project;
+      const duplicate: ProjectCard = {
+        ...fullProject,
+        id: crypto.randomUUID(),
+        name: `${project.name} (Salinan)`,
+        clips: fullProject.clips.map(clip => ({ ...clip, id: crypto.randomUUID() })),
+        createdAt: now,
+        updatedAt: now
+      };
       await createProject(duplicate);
       setProjects(old => [duplicate, ...old]);
       setStorageError("");
