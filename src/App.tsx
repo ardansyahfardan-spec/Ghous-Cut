@@ -157,6 +157,14 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   useEffect(() => {
     const activeMedia = [...activeVisualClips, ...activeAudioClips]
       .filter(c => c.kind === "video" || c.kind === "audio");
+    const activeIds = new Set(activeMedia.map(clip => clip.id));
+
+    // Keep media elements mounted across edit points to avoid decoder teardown
+    // and reinitialization every time the playhead enters the next clip.
+    mediaRefs.current.forEach((element, id) => {
+      if (!activeIds.has(id) && !element.paused) element.pause();
+    });
+
     activeMedia.forEach(clip => {
       const element = mediaRefs.current.get(clip.id);
       if (!element) return;
@@ -498,43 +506,41 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
           <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><span>{aspectRatio}</span><span>FIT</span></div></div>
           <div className="preview-stage">
             {!currentPreview && <div className="preview-empty"><div className="preview-logo"><Clapperboard size={30}/></div><strong>Your story starts here</strong><span>Import a clip and select it in the timeline</span></div>}
-            {activeVisualClips.map(clip => clip.kind === "video" ? (
-              <video key={clip.id} ref={element => {
-                if (element) mediaRefs.current.set(clip.id, element);
-                else mediaRefs.current.delete(clip.id);
-              }} src={clip.src} className="preview-media preview-layer" style={{ zIndex: clip.track + 1, opacity: clip.opacity ?? 1 }}
-                muted={false} playsInline preload="auto"
-                onLoadedMetadata={e => {
-                  const target = Math.max(0, clip.sourceIn + playhead - clip.start);
-                  if (!playing) {
-                    try { e.currentTarget.currentTime = Math.min(target, e.currentTarget.duration); } catch { /* Wait for media readiness. */ }
-                  }
-                  const d = e.currentTarget.duration;
-                  if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
-                }}
-                onTimeUpdate={e => {
-                  if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
-                }}
-                onEnded={() => {
-                  if (clockClip?.id === clip.id) {
-                    const end = clip.start + clip.duration;
-                    setPlayhead(end);
-                    if (end >= duration - 0.05) setPlaying(false);
-                  }
-                }} />
-            ) : (
-              <img key={clip.id} src={clip.src} className="preview-media preview-layer image-preview" style={{ zIndex: clip.track + 1 }} alt={clip.name}/>
-            ))}
-            {activeAudioClips.map(clip => (
+            {clips.filter(clip => clip.kind === "video" || clip.kind === "image").map(clip => {
+              const isActive = activeVisualClips.some(activeClip => activeClip.id === clip.id);
+              if (clip.kind === "image") return (
+                <img key={clip.id} src={clip.src} className="preview-media preview-layer image-preview"
+                  style={{ zIndex: clip.track + 1, visibility: isActive ? "visible" : "hidden" }} alt={clip.name}/>
+              );
+              return (
+                <video key={clip.id} ref={element => {
+                  if (element) mediaRefs.current.set(clip.id, element);
+                  else mediaRefs.current.delete(clip.id);
+                }} src={clip.src} className="preview-media preview-layer"
+                  style={{ zIndex: clip.track + 1, opacity: clip.opacity ?? 1, visibility: isActive ? "visible" : "hidden" }}
+                  muted={false} playsInline preload={isActive ? "auto" : "metadata"}
+                  onLoadedMetadata={e => {
+                    const d = e.currentTarget.duration;
+                    if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                  }}
+                  onTimeUpdate={e => {
+                    if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
+                  }}
+                  onEnded={() => {
+                    if (clockClip?.id === clip.id) {
+                      const end = clip.start + clip.duration;
+                      setPlayhead(end);
+                      if (end >= duration - 0.05) setPlaying(false);
+                    }
+                  }} />
+              );
+            })}
+            {clips.filter(clip => clip.kind === "audio").map(clip => (
               <audio key={clip.id} ref={element => {
                 if (element) mediaRefs.current.set(clip.id, element);
                 else mediaRefs.current.delete(clip.id);
-              }} src={clip.src} preload="auto"
+              }} src={clip.src} preload={activeAudioClips.some(activeClip => activeClip.id === clip.id) ? "auto" : "metadata"}
                 onLoadedMetadata={e => {
-                  const target = Math.max(0, clip.sourceIn + playhead - clip.start);
-                  if (!playing) {
-                    try { e.currentTarget.currentTime = Math.min(target, e.currentTarget.duration); } catch { /* Wait for media readiness. */ }
-                  }
                   const d = e.currentTarget.duration;
                   if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
                 }}
