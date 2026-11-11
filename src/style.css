@@ -447,3 +447,14 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
 .timeline-clip.audio { background: linear-gradient(100deg, #35443a, #242f29); border-color: #607b68; color: #dce9dd; }
 .timeline-clip.selected { outline: 2px solid var(--gc-red-soft); outline-offset: 1px; }
 .timeline-clip:active { cursor: grabbing; }
+
+.zoom-control { display:flex; align-items:center; gap:6px; }
+.zoom-control .zoom-step, .zoom-control .zoom-reset {
+  min-width:22px; height:24px; padding:0 5px; border:1px solid var(--gc-border);
+  border-radius:5px; background:var(--gc-surface-raised); color:var(--gc-text);
+  font:11px 'DM Mono'; cursor:pointer;
+}
+.zoom-control .zoom-step:hover, .zoom-control .zoom-reset:hover {
+  border-color:var(--gc-red-soft); color:var(--gc-red-soft);
+}
+.zoom-control .zoom-reset { min-width:42px; font-size:9px; }
