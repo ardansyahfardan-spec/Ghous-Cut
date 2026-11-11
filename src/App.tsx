@@ -171,22 +171,31 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       const duration = await readBrowserMediaDuration(src, kind);
       return { file, kind, src, duration };
     }));
+    const relinked = new Map<string, Clip>();
+    const additions: Clip[] = [];
     const cursors = new Map<number, number>();
     for (const clip of clips) {
       cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
     }
-    const newClips: Clip[] = prepared.map(({ file, kind, src, duration }) => {
+    for (const { file, kind, src, duration } of prepared) {
+      const missing = clips.find(c => !c.src && !relinked.has(c.id) && c.name.toLowerCase() === file.name.toLowerCase());
+      if (missing) {
+        relinked.set(missing.id, { ...missing, path: file.name, src, file });
+        continue;
+      }
       const track = kind === "audio" ? 2 : kind === "image" ? 1 : 0;
       const start = cursors.get(track) ?? 0;
       cursors.set(track, start + duration);
-      return {
+      additions.push({
         id: crypto.randomUUID(), name: file.name, path: file.name, src, file,
         kind, track, start, sourceIn: 0, duration, volume: 1
-      };
-    });
-    setClips(old => [...old, ...newClips]);
-    if (newClips[0]) { setSelected(newClips[0].id); setPlayhead(newClips[0].start); }
-    setNotice(`Imported ${newClips.length} media file(s). Durasi dibaca dari metadata lokal.`);
+      });
+    }
+    setClips(old => [...old.map(c => relinked.get(c.id) ?? c), ...additions]);
+    const first = [...relinked.values(), ...additions][0];
+    if (first) { setSelected(first.id); setPlayhead(first.start); }
+    const relinkCount = relinked.size;
+    setNotice(`${relinkCount} media relinked · ${additions.length} new media added.`);
   };
 
   const importMedia = async () => {
