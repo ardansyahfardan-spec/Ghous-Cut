@@ -8,23 +8,33 @@ $pixels = New-Object byte[] ($width * $height * 4)
 
 for ($y = 0; $y -lt $height; $y++) {
   for ($x = 0; $x -lt $width; $x++) {
-    $dx = $x - 15.5
-    $dy = $y - 15.5
-    $radius = [Math]::Sqrt(($dx * $dx) + ($dy * $dy))
-    $b = 24; $g = 27; $r = 34
-    if ($radius -le 13 -and $radius -ge 10) { $b = 42; $g = 62; $r = 238 }
-    if ($radius -lt 10) { $b = 24; $g = 27; $r = 34 }
-    if ($y -ge 5 -and $y -le 9 -and $x -ge 7 -and $x -le 24 -and (($x + $y) % 6 -lt 3)) {
-      $b = 235; $g = 235; $r = 242
-    }
-    if ($y -ge 12 -and $y -le 19 -and $x -ge 12 -and $x -le 19) {
-      $b = 235; $g = 235; $r = 242
-    }
-    $index = (($y * $width) + $x) * 4
+    $cornerX = $x
+    if ($x -lt 6) { $cornerX = 6 } elseif ($x -ge 26) { $cornerX = 25 }
+    $cornerY = $y
+    if ($y -lt 6) { $cornerY = 6 } elseif ($y -ge 26) { $cornerY = 25 }
+    $inside = (($x - $cornerX) * ($x - $cornerX) + ($y - $cornerY) * ($y - $cornerY)) -le 36
+
+    $dx = $x - 16
+    $dy = $y - 15
+    $head = (($dx * $dx) + ($dy * $dy)) -le 110 -and $y -le 16
+    $body = $x -ge 7 -and $x -le 24 -and $y -ge 13 -and $y -le 24
+    $scallop = $y -ge 25 -and $y -le 27 -and (($x -ge 7 -and $x -le 10) -or ($x -ge 13 -and $x -le 19) -or ($x -ge 22 -and $x -le 24))
+    $ghost = $head -or $body -or $scallop
+
+    $r = 34; $g = 23; $b = 45; $a = 255
+    if (-not $inside) { $a = 0 }
+    if ($ghost -and $inside) { $r = 239; $g = 222; $b = 255 }
+    $eyeLeft = (($x - 12.5) * ($x - 12.5) / 3.2) + (($y - 16) * ($y - 16) / 6.2) -le 1
+    $eyeRight = (($x - 19.5) * ($x - 19.5) / 3.2) + (($y - 16) * ($y - 16) / 6.2) -le 1
+    if (($eyeLeft -or $eyeRight) -and $ghost) { $r = 34; $g = 23; $b = 45 }
+    if ($y -eq 21 -and $x -ge 14 -and $x -le 17 -and $ghost) { $r = 34; $g = 23; $b = 45 }
+
+    # DIB bitmap rows are stored bottom-up.
+    $index = (((($height - 1 - $y) * $width) + $x) * 4)
     $pixels[$index] = [byte]$b
     $pixels[$index + 1] = [byte]$g
     $pixels[$index + 2] = [byte]$r
-    $pixels[$index + 3] = 255
+    $pixels[$index + 3] = [byte]$a
   }
 }
 
@@ -65,4 +75,4 @@ $icoWriter.Write($dib)
 [System.IO.File]::WriteAllBytes((Join-Path $iconDir "icon.ico"), $icoStream.ToArray())
 $icoWriter.Dispose()
 $icoStream.Dispose()
-Write-Host "Generated src-tauri/icons/icon.ico"
+Write-Host "Generated Ghous Cut ghost icon: src-tauri/icons/icon.ico"
