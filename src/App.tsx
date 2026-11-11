@@ -503,7 +503,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                 if (element) mediaRefs.current.set(clip.id, element);
                 else mediaRefs.current.delete(clip.id);
               }} src={clip.src} className="preview-media preview-layer" style={{ zIndex: clip.track + 1, opacity: clip.opacity ?? 1 }}
-                muted={false} playsInline preload="auto"
+                muted={false} playsInline preload={playing ? "auto" : "metadata"}
                 onLoadedMetadata={e => {
                   const target = Math.max(0, clip.sourceIn + playhead - clip.start);
                   if (!playing) {
@@ -529,7 +529,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               <audio key={clip.id} ref={element => {
                 if (element) mediaRefs.current.set(clip.id, element);
                 else mediaRefs.current.delete(clip.id);
-              }} src={clip.src} preload="auto"
+              }} src={clip.src} preload={playing ? "auto" : "metadata"}
                 onLoadedMetadata={e => {
                   const target = Math.max(0, clip.sourceIn + playhead - clip.start);
                   if (!playing) {
