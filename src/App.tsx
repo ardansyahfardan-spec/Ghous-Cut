@@ -650,19 +650,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 }
 
 type ProjectCard = StoredProject<Clip>;
-function GhostMark({ size = 28 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-    <path d="M12 52V29C12 16.85 20.95 7 32 7s20 9.85 20 22v23c0 2.2-2.55 3.45-4.3 2.1l-5.3-4.1-6.1 4.5a3.7 3.7 0 0 1-4.5 0l-6.1-4.5-5.3 4.1C18.55 55.45 16 54.2 16 52" fill="currentColor"/>
-    <ellipse cx="24" cy="29" rx="3.2" ry="4.4" fill="#171321"/>
-    <ellipse cx="40" cy="29" rx="3.2" ry="4.4" fill="#171321"/>
-    <path d="M27 39c3.2 3.2 6.8 3.2 10 0" stroke="#171321" strokeWidth="2.8" strokeLinecap="round"/>
-    <path d="M32 2v4M7 19l4 2M57 19l-4 2" stroke="#C94B4B" strokeWidth="2.5" strokeLinecap="round"/>
-  </svg>;
-}
-
 function BrandLogo({ size = 28 }: { size?: number }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <GhostMark size={size}/>;
+  if (failed) return <Clapperboard size={size} aria-label="Ghous Cut"/>;
   return <img
     className="brand-logo-image"
     src={`${import.meta.env.BASE_URL}logo%20ghous%20cut.png`}
@@ -855,14 +845,14 @@ export default function App() {
       {storageError && <div className="storage-warning">{storageError}</div>}
       <div className="project-section-heading"><h2>Semua proyek</h2><span>{visibleProjects.length} proyek</span></div>
       {visibleProjects.length === 0 ? <div className="library-empty">
-        <div className="empty-ghost"><GhostMark size={52}/></div>
+        <div className="empty-ghost"><BrandLogo size={56}/></div>
         <h3>{search ? "Proyek tidak ditemukan" : "Belum ada proyek"}</h3>
         <p>{search ? "Coba kata pencarian lain." : "Proyek video yang kamu buat akan tersimpan di sini."}</p>
         {!search && <button className="new-project-button secondary" onClick={() => setCreating(true)}><Plus size={16}/> Buat proyek pertama</button>}
       </div> : <div className="project-grid">
         {visibleProjects.map(project => <article className="project-card" key={project.id}>
           <button className="project-open" onClick={() => void openProject(project)} aria-label={`Buka ${project.name}`}>
-            <div className="project-thumbnail"><div className="thumbnail-glow"/>{project.clips.find(clip => clip.kind === "image" && clip.src)?.src ? <img src={project.clips.find(clip => clip.kind === "image" && clip.src)?.src} alt="" loading="lazy"/> : project.clips.find(clip => clip.kind === "video" && clip.src)?.src ? <video src={project.clips.find(clip => clip.kind === "video" && clip.src)?.src} muted playsInline preload="metadata"/> : <GhostMark size={42}/>}<span className="thumbnail-play"><FilmIcon size={17}/></span></div>
+            <div className="project-thumbnail"><div className="thumbnail-glow"/>{project.clips.find(clip => clip.kind === "image" && clip.src)?.src ? <img src={project.clips.find(clip => clip.kind === "image" && clip.src)?.src} alt="" loading="lazy"/> : project.clips.find(clip => clip.kind === "video" && clip.src)?.src ? <video src={project.clips.find(clip => clip.kind === "video" && clip.src)?.src} muted playsInline preload="metadata"/> : <BrandLogo size={64}/>}<span className="thumbnail-play"><FilmIcon size={17}/></span></div>
             <div className="project-card-info"><strong>{project.name}</strong><span><Clock3 size={12}/> {formatDate(project.updatedAt)}</span></div>
           </button>
           <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void renameProject(project)} title="Ubah nama proyek" aria-label={`Ubah nama ${project.name}`}>✎</button><button onClick={() => void duplicateProject(project)} title="Duplikat proyek" aria-label={`Duplikat ${project.name}`}>⧉</button><button onClick={() => void removeProject(project)} title="Hapus proyek" aria-label={`Hapus ${project.name}`}><Trash2 size={15}/></button></div>
