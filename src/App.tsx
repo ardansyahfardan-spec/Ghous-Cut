@@ -655,7 +655,7 @@ function BrandLogo({ size = 28 }: { size?: number }) {
   if (failed) return <Clapperboard size={size} aria-label="Ghous Cut"/>;
   return <img
     className="brand-logo-image"
-    src={`${import.meta.env.BASE_URL}logo%20ghous%20cut.png`}
+    src={`${import.meta.env.BASE_URL}logo%20ghooust%20web.svg`}
     width={size}
     height={size}
     alt="Ghous Cut"
