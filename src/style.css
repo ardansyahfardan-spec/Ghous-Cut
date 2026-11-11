@@ -427,3 +427,23 @@ button:focus-visible { outline-color:var(--gc-red-soft); }
   background: transparent;
   filter: none;
 }
+
+
+/* Timeline interaction and consistent Ghous Cut palette */
+.ruler {
+  touch-action: none;
+  user-select: none;
+  cursor: ew-resize;
+}
+.ruler:active { cursor: grabbing; }
+.track-lane { background-repeat: repeat; }
+.timeline-clip {
+  background: linear-gradient(100deg, #54302f, #382321);
+  border-color: #92504b;
+  color: #f4e6dc;
+}
+.timeline-clip.video { background: linear-gradient(100deg, #54302f, #382321); border-color: #92504b; }
+.timeline-clip.image { background: linear-gradient(100deg, #494331, #302d23); border-color: #887750; color: #eee4cd; }
+.timeline-clip.audio { background: linear-gradient(100deg, #35443a, #242f29); border-color: #607b68; color: #dce9dd; }
+.timeline-clip.selected { outline: 2px solid var(--gc-red-soft); outline-offset: 1px; }
+.timeline-clip:active { cursor: grabbing; }
