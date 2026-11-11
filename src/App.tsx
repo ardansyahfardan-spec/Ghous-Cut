@@ -576,7 +576,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         <div className="timeline-panel panel">
           <div className="timeline-toolbar">
             <div className="timeline-title"><span className="eyebrow">EDIT</span><h2>Timeline</h2></div>
-            <div className="edit-tools">
+            <div className="portrait-primary-tools" aria-label="Quick editing tools"><button className="tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={16}/></button><button className="tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={16}/></button></div>
+             <div className="edit-tools">
               <button className="tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={16}/><span>Split</span></button>
               <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Scissors size={16}/><span>All</span></button>
               <button className="tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={16}/><span>Copy</span></button>
@@ -709,10 +710,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             <div className="playhead" style={{left:116+playhead*scale}}><div className="playhead-cap"/><div className="playhead-line"/></div>
           </div>
           <div className="mobile-edit-dock" aria-label="Editing tools">
-            <button className="mobile-tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={17}/><span>Split</span></button>
             <button className="mobile-tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Split size={17}/><span>Split all</span></button>
             <button className="mobile-tool-btn" onClick={cutSelected} title="Cut clips" aria-label="Cut clips"><ClipboardX size={17}/><span>Cut</span></button>
-            <button className="mobile-tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={17}/><span>Copy</span></button>
             <button className="mobile-tool-btn" onClick={pasteClip} title="Paste clips" aria-label="Paste clips"><ClipboardPaste size={17}/><span>Paste</span></button>
             <button className="mobile-tool-btn" onClick={duplicateSelected} title="Duplicate clip" aria-label="Duplicate clip"><CopyPlus size={17}/><span>Duplicate</span></button>
             <button className="mobile-tool-btn" onClick={trimLeft} title="Trim start to playhead" aria-label="Trim start"><ArrowLeftToLine size={17}/><span>Trim in</span></button>
