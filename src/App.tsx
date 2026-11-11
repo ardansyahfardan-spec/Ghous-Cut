@@ -36,8 +36,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
-  const clipClipboard = useRef<Clip | null>(null);
+  const clipClipboard = useRef<Clip[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectionAnchor = useRef<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [denoise, setDenoise] = useState(true);
@@ -106,6 +108,19 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   }, [clips, projectReady, projectId, projectName]);
 
   const active = clips.find(c => c.id === selected) || null;
+  const selectedClips = useMemo(() => clips.filter(c => selectedIds.includes(c.id)), [clips, selectedIds]);
+  const selectClip = (clip: Clip, event?: React.MouseEvent) => {
+    if (event?.shiftKey && selectionAnchor.current) {
+      const anchor=clips.find(c=>c.id===selectionAnchor.current);
+      if(anchor && anchor.track===clip.track){
+        const ordered=clips.filter(c=>c.track===clip.track).sort((a,b)=>a.start-b.start);
+        const from=ordered.findIndex(c=>c.id===anchor.id),to=ordered.findIndex(c=>c.id===clip.id);
+        setSelectedIds(ordered.slice(Math.min(from,to),Math.max(from,to)+1).map(c=>c.id));setSelected(clip.id);return;
+      }
+    }
+    if(event?.ctrlKey||event?.metaKey){setSelectedIds(old=>old.includes(clip.id)?old.filter(id=>id!==clip.id):[...old,clip.id]);setSelected(clip.id);selectionAnchor.current=clip.id;return;}
+    setSelected(clip.id);setSelectedIds([clip.id]);selectionAnchor.current=clip.id;
+  };
   const activeVisualClips = clips.filter(c =>
     c.track < 2 && c.kind !== "audio" && playhead >= c.start && playhead < c.start + c.duration
   ).sort((a, b) => a.track - b.track || a.start - b.start);
@@ -316,44 +331,28 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   };
 
   const copySelected = () => {
-    if (!active) return setNotice("Pilih klip yang ingin disalin.");
-    clipClipboard.current = { ...active };
-    setNotice("Clip copied.");
+    if(!selectedClips.length)return setNotice("Pilih satu atau beberapa klip terlebih dahulu.");
+    clipClipboard.current=selectedClips.map(c=>({...c}));setNotice(selectedClips.length+" klip disalin.");
   };
   const cutSelected = () => {
-    if (!active) return setNotice("Pilih klip yang ingin dipotong.");
-    clipClipboard.current = { ...active };
-    updateTimeline(old => old.filter(c => c.id !== active.id));
-    setSelected(null);
-    setNotice("Clip cut to Ghous Cut clipboard.");
+    if(!selectedClips.length)return setNotice("Pilih klip yang ingin dipotong.");
+    const ids=new Set(selectedIds);clipClipboard.current=selectedClips.map(c=>({...c}));
+    updateTimeline(old=>old.filter(c=>!ids.has(c.id)));setSelected(null);setSelectedIds([]);
+    setNotice(ids.size+" klip dipindahkan ke clipboard.");
   };
   const pasteClip = () => {
-    const source = clipClipboard.current;
-    if (!source) return setNotice("Clipboard Ghous Cut masih kosong.");
-    const pasted: Clip = {
-      ...source,
-      id: crypto.randomUUID(),
-      name: source.name.replace(/ \(copy\)$/i, "") + " (copy)",
-      start: playhead,
-      file: source.file,
-      src: source.src
-    };
-    updateTimeline(old => [...old, pasted]);
-    setSelected(pasted.id);
-    setNotice("Clip pasted at playhead.");
+    const source=clipClipboard.current;if(!source.length)return setNotice("Clipboard Ghous Cut masih kosong.");
+    const origin=Math.min(...source.map(c=>c.start));
+    const pasted=source.map(c=>({...c,id:crypto.randomUUID(),name:c.name.replace(/ \\(copy\\)$/i,"")+" (copy)",start:playhead+(c.start-origin)}));
+    updateTimeline(old=>[...old,...pasted]);setSelected(pasted[pasted.length-1].id);setSelectedIds(pasted.map(c=>c.id));
+    setNotice(pasted.length+" klip ditempel dengan susunan relatif yang sama.");
   };
   const duplicateSelected = () => {
-    if (!active) return setNotice("Pilih klip yang ingin diduplikasi.");
-    const duplicate: Clip = {
-      ...active,
-      id: crypto.randomUUID(),
-      name: active.name.replace(/ \(copy\)$/i, "") + " (copy)",
-      start: active.start + active.duration
-    };
-    updateTimeline(old => [...old, duplicate]);
-    setSelected(duplicate.id);
-    setPlayhead(duplicate.start);
-    setNotice("Clip duplicated after the original.");
+    if(!selectedClips.length)return setNotice("Pilih klip yang ingin diduplikasi.");
+    const origin=Math.min(...selectedClips.map(c=>c.start)),offset=Math.max(...selectedClips.map(c=>c.start+c.duration))-origin;
+    const duplicates=selectedClips.map(c=>({...c,id:crypto.randomUUID(),name:c.name.replace(/ \\(copy\\)$/i,"")+" (copy)",start:c.start+offset}));
+    updateTimeline(old=>[...old,...duplicates]);setSelected(duplicates[duplicates.length-1].id);setSelectedIds(duplicates.map(c=>c.id));
+    setPlayhead(origin+offset);setNotice(duplicates.length+" klip diduplikasi dengan susunan tetap.");
   };
 
   const trimLeft = () => {
@@ -371,10 +370,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     setNotice("Trimmed the end of the selected clip.");
   };
   const removeSelected = () => {
-    if (!active) return;
-    updateTimeline(old => old.filter(c => c.id !== active.id));
-    setSelected(null);
-    setNotice("Clip removed from timeline.");
+    const ids=new Set(selectedIds.length?selectedIds:(active?[active.id]:[]));if(!ids.size)return;
+    updateTimeline(old=>old.filter(c=>!ids.has(c.id)));setSelected(null);setSelectedIds([]);selectionAnchor.current=null;
+    setNotice(ids.size+" klip dihapus dari timeline.");
   };
   // Magnetic timeline snapping: align the moved clip's start/end to nearby
   // clip edges, the playhead, or the beginning of the timeline.
@@ -469,6 +467,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       if (mod && event.key.toLowerCase() === "x") { event.preventDefault(); cutSelected(); return; }
       if (mod && event.key.toLowerCase() === "v") { event.preventDefault(); pasteClip(); return; }
       if (mod && event.key.toLowerCase() === "d") { event.preventDefault(); duplicateSelected(); return; }
+      if (mod && event.key.toLowerCase() === "a") { event.preventDefault(); setSelectedIds(clips.map(c=>c.id)); if(clips[0])setSelected(clips[0].id); return; }
       if (mod && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom(v => Math.min(1.8, Math.round((v + 0.1) * 10) / 10)); return; }
       if (mod && event.key === "-") { event.preventDefault(); setZoom(v => Math.max(0.6, Math.round((v - 0.1) * 10) / 10)); return; }
       if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
@@ -533,7 +532,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         <div className="asset-heading"><span>ASSETS</span><span>{clips.length} items</span></div>
         <div className="asset-list">
           {clips.length === 0 && <div className="empty-assets"><Film size={25}/><p>Your media will appear here</p><span>Import files to begin your project</span></div>}
-          {clips.map(c => <button key={c.id} className={`asset-row ${selected===c.id?"chosen":""}`} onClick={() => {setSelected(c.id);setPlayhead(c.start);}}>
+          {clips.map(c => <button key={c.id} className={`asset-row ${selectedIds.includes(c.id)?"chosen":""}`} onClick={() => {selectClip(c);setPlayhead(c.start);}}>
             <span className={`asset-icon ${c.kind}`}>{c.kind==="video"?<Video size={16}/>:c.kind==="image"?<ImageIcon size={16}/>:<Music2 size={16}/>}</span>
             <span className="asset-meta"><strong>{c.name}</strong><small>{c.kind.toUpperCase()} · {fmt(c.duration)}</small></span>
           </button>)}
@@ -608,12 +607,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
             <div className="edit-tools">
               <button className="tool-btn" onClick={splitSelected} title="Split selected clip at playhead"><Scissors size={15}/><span>Split</span></button>
               <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks at playhead">✂<span>Split all</span></button>
-              <button className="tool-btn" onClick={copySelected} title="Copy selected clip">▢<span>Copy</span></button>
+              <button className="tool-btn" onClick={copySelected} title="Copy selected clips">▢<span>Copy {selectedIds.length>1?selectedIds.length:""}</span></button>
               <button className="tool-btn" onClick={pasteClip} title="Paste clip at playhead">▣<span>Paste</span></button>
               <button className="tool-btn" onClick={duplicateSelected} title="Duplicate selected clip">⧉<span>Duplicate</span></button>
               <button className="tool-btn" onClick={trimLeft} title="Trim beginning to playhead">◧<span>Trim left</span></button>
               <button className="tool-btn" onClick={trimRight} title="Trim end to playhead">◨<span>Trim right</span></button>
-              <button className="tool-btn danger-tool" onClick={removeSelected} title="Remove selected clip"><Trash2 size={15}/></button>
+              <button className="tool-btn danger-tool" onClick={removeSelected} title="Remove selected clips"><Trash2 size={15}/>{selectedIds.length>1&&<span>{selectedIds.length}</span>}</button>
             </div>
             <div className="zoom-control"><button type="button" className="zoom-step" aria-label="Zoom out timeline" onClick={()=>setZoom(v=>Math.max(0.6,Math.round((v-0.1)*10)/10))}>−</button><input aria-label="Timeline zoom" type="range" min="0.6" max="1.8" step="0.1" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/><button type="button" className="zoom-step" aria-label="Zoom in timeline" onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+0.1)*10)/10))}>+</button><button type="button" className="zoom-reset" onClick={()=>setZoom(1)} title="Reset zoom">100%</button></div>
           </div>
@@ -673,9 +672,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                     touchDrag.current=null;
                   }}
                   onPointerCancel={()=>{touchDrag.current=null;}}
-                  className={`timeline-clip ${c.kind} ${selected===c.id?"selected":""}`}
+                  className={`timeline-clip ${c.kind} ${selectedIds.includes(c.id)?"selected":""}`}
                   style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}
-                  onClick={()=>{setSelected(c.id);setPlayhead(c.start);}}>
+                  onClick={e=>{selectClip(c,e);setPlayhead(c.start);}}>
                   <span className="clip-thumb">{c.kind==="video"?<Film size={13}/>:c.kind==="image"?<ImageIcon size={13}/>:<AudioLines size={13}/>}</span><span className="clip-name">{c.name}</span><span className="clip-duration">{fmt(c.duration)}</span>
                 </div>)}
               </div>
@@ -704,7 +703,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         <div className="shortcut-group"><h3>Playback & navigation</h3><div><span>Play / Pause</span><kbd>Space</kbd></div><div><span>Previous / next frame</span><kbd>←</kbd><kbd>→</kbd></div><div><span>Previous / next edit point</span><kbd>↑</kbd><kbd>↓</kbd></div><div><span>Go to beginning / end</span><kbd>Home</kbd><kbd>End</kbd></div><div><span>Stop playback</span><kbd>Esc</kbd></div></div>
         <div className="shortcut-group"><h3>Editing</h3><div><span>Split selected clip</span><kbd>Ctrl</kbd><kbd>B</kbd></div><div><span>Split all tracks</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>B</kbd></div><div><span>Copy / Cut / Paste</span><kbd>Ctrl</kbd><kbd>C</kbd><kbd>Ctrl</kbd><kbd>X</kbd><kbd>Ctrl</kbd><kbd>V</kbd></div><div><span>Duplicate selected clip</span><kbd>Ctrl</kbd><kbd>D</kbd></div><div><span>Timeline zoom in / out / reset</span><kbd>Ctrl</kbd><kbd>+</kbd><kbd>Ctrl</kbd><kbd>−</kbd><kbd>Ctrl</kbd><kbd>0</kbd></div><div><span>Trim left / right to playhead</span><kbd>Q</kbd><kbd>W</kbd></div><div><span>Delete selected clip</span><kbd>Del</kbd></div><div><span>Undo / Redo</span><kbd>Ctrl</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd><kbd>Ctrl</kbd><kbd>Y</kbd></div></div>
         <div className="shortcut-group"><h3>Project</h3><div><span>Import media</span><kbd>Ctrl</kbd><kbd>I</kbd></div><div><span>Save project file</span><kbd>Ctrl</kbd><kbd>S</kbd></div><div><span>Export video</span><kbd>Ctrl</kbd><kbd>E</kbd></div></div>
-        <p><kbd>?</kbd> membuka daftar shortcut. <kbd>Esc</kbd> menutup dialog atau menghentikan playback. Shortcut tidak aktif saat kamu sedang mengetik di kolom input.</p>
+        <p><kbd>Ctrl</kbd>+<kbd>A</kbd> memilih semua klip. <kbd>Shift</kbd>+klik memilih rentang pada track yang sama. <kbd>Ctrl</kbd>+klik menambah atau mengurangi pilihan. <kbd>?</kbd> membuka daftar shortcut. <kbd>Esc</kbd> menutup dialog atau menghentikan playback. Shortcut tidak aktif saat kamu sedang mengetik di kolom input.</p>
       </section>
     </div>}
     <footer className="statusbar"><div><span className="status-led"/> {notice}</div><div><WandSparkles size={13}/> GHOUS CUT <span className="status-sep">|</span> LOCAL WORKSPACE</div></footer>
