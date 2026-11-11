@@ -6,7 +6,7 @@ import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
   Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Search, Clock3, ArrowLeft, Film as FilmIcon, Keyboard, Undo2, Redo2,
-  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX, Volume2
+  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp, SkipBack, SkipForward, Pencil, Minus, VolumeX
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
