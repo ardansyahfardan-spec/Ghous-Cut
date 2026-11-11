@@ -63,8 +63,8 @@ export default function App() {
     } catch {
       // Fullscreen is optional; continue to attempt orientation lock.
     }
-    const orientation = screen.orientation as ScreenOrientation & { lock?: (value: "landscape") => Promise<void> };
-    if (!orientation.lock) {
+    const orientation = screen.orientation as (ScreenOrientation & { lock?: (value: "landscape") => Promise<void> }) | undefined;
+    if (!orientation?.lock) {
       setNotice("Browser ini belum mendukung penguncian otomatis. Putar HP ke posisi landscape untuk melanjutkan.");
       return;
     }
