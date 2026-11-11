@@ -119,7 +119,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         setSelectedIds(ordered.slice(Math.min(from,to),Math.max(from,to)+1).map(c=>c.id));setSelected(clip.id);return;
       }
     }
-    if(event?.ctrlKey||event?.metaKey){setSelectedIds(old=>old.includes(clip.id)?old.filter(id=>id!==clip.id):[...old,clip.id]);setSelected(clip.id);selectionAnchor.current=clip.id;return;}
+    if(event?.ctrlKey||event?.metaKey){
+      const next=selectedIds.includes(clip.id)?selectedIds.filter(id=>id!==clip.id):[...selectedIds,clip.id];
+      setSelectedIds(next);setSelected(next[next.length-1]??null);selectionAnchor.current=clip.id;return;
+    }
     setSelected(clip.id);setSelectedIds([clip.id]);selectionAnchor.current=clip.id;
   };
   const activeVisualClips = clips.filter(c =>
@@ -402,8 +405,11 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   };
 
   const moveClip = (id: string, track: number, start: number) => {
-    const snappedStart = snapTime(id, start);
-    updateTimeline(old => old.map(c => c.id === id ? { ...c, track, start: snappedStart } : c));
+    const moving=clips.find(c=>c.id===id);if(!moving)return;
+    const group=selectedIds.includes(id)?clips.filter(c=>selectedIds.includes(c.id)):[moving];
+    const snappedStart=snapTime(id,start),trackDelta=track-moving.track;
+    const groupIds=new Set(group.map(c=>c.id));
+    updateTimeline(old=>old.map(c=>groupIds.has(c.id)?{...c,start:Math.max(0,snappedStart+(c.start-moving.start)),track:Math.max(0,Math.min(2,c.track+trackDelta))}:c));
     setDragging(null);
   };
 
