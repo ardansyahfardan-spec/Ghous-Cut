@@ -4,6 +4,7 @@ export type StoredProject<T = any> = {
   clips: T[];
   createdAt: number;
   updatedAt: number;
+  aspectRatio?: "16:9" | "9:16" | "1:1";
 };
 
 const DB_NAME = "ghous-cut-local";
@@ -72,7 +73,7 @@ export async function saveProject<T>(id: string, name: string, clips: T[]): Prom
     const request = store.get(id);
     request.onsuccess = () => {
       const current = request.result as StoredProject<T> | undefined;
-      store.put({ id, name, clips, createdAt: current?.createdAt ?? Date.now(), updatedAt: Date.now() } satisfies StoredProject<T>, id);
+      store.put({ ...current, id, name, clips, createdAt: current?.createdAt ?? Date.now(), updatedAt: Date.now() } satisfies StoredProject<T>, id);
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
