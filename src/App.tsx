@@ -670,6 +670,39 @@ export default function App() {
     setScreen("editor");
   };
 
+  const renameProject = async (project: ProjectCard) => {
+    const nextName = window.prompt("Ubah nama proyek", project.name);
+    if (!nextName?.trim() || nextName.trim() === project.name) return;
+    const updated = { ...project, name: nextName.trim(), updatedAt: Date.now() };
+    try {
+      await saveProject(updated.id, updated.name, updated.clips);
+      setProjects(old => old.map(item => item.id === updated.id ? updated : item));
+      setActiveProject(current => current?.id === updated.id ? updated : current);
+      setStorageError("");
+    } catch (error) {
+      setStorageError(`Nama proyek gagal diperbarui: ${String(error)}`);
+    }
+  };
+
+  const duplicateProject = async (project: ProjectCard) => {
+    const now = Date.now();
+    const duplicate: ProjectCard = {
+      ...project,
+      id: crypto.randomUUID(),
+      name: `${project.name} (Salinan)`,
+      clips: project.clips.map(clip => ({ ...clip, id: crypto.randomUUID() })),
+      createdAt: now,
+      updatedAt: now
+    };
+    try {
+      await createProject(duplicate);
+      setProjects(old => [duplicate, ...old]);
+      setStorageError("");
+    } catch (error) {
+      setStorageError(`Proyek gagal diduplikasi: ${String(error)}`);
+    }
+  };
+
   const removeProject = async (project: ProjectCard) => {
     if (!window.confirm(`Hapus proyek "${project.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
     await deleteProject(project.id);
@@ -730,7 +763,7 @@ export default function App() {
             <div className="project-thumbnail"><div className="thumbnail-glow"/><GhostMark size={42}/><span className="thumbnail-play"><FilmIcon size={17}/></span></div>
             <div className="project-card-info"><strong>{project.name}</strong><span><Clock3 size={12}/> {formatDate(project.updatedAt)}</span></div>
           </button>
-          <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void removeProject(project)} title="Hapus proyek"><MoreVertical size={17}/></button></div>
+          <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void renameProject(project)} title="Ubah nama proyek" aria-label={`Ubah nama ${project.name}`}>✎</button><button onClick={() => void duplicateProject(project)} title="Duplikat proyek" aria-label={`Duplikat ${project.name}`}>⧉</button><button onClick={() => void removeProject(project)} title="Hapus proyek" aria-label={`Hapus ${project.name}`}><Trash2 size={15}/></button></div>
         </article>)}
       </div>}
     </section>
