@@ -250,7 +250,7 @@ fn export_timeline(
                 clip.volume
             );
             if denoise { filters.push_str(",afftdn=nf=-25"); }
-            filters.push_str(&format!(",adelay={delay_ms}|{delay_ms},atrim=duration={:.3}[{label}]", clip.duration));
+            filters.push_str(&format!(",adelay=delays={delay_ms}:all=1,atrim=duration={:.3}[{label}]", clip.duration));
             graph.push(filters);
             audio_labels.push(format!("[{label}]"));
         }
