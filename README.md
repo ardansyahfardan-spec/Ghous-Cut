@@ -9,7 +9,7 @@ A browser-first video editing workspace built with React, TypeScript and Vite, w
 - Preview video, image and audio assets
 - Dark editing workspace designed for desktop browsers
 
-**Current browser limitation:** files are previewed locally in the browser session. MP4 rendering is not yet available in the web build. The Windows desktop export path still uses FFmpeg installed on the PC and exports the selected source video clip only.
+**Current limitations:** browser MP4 rendering and full multi-track compositing are not implemented yet. Browser projects and imported files are autosaved locally in that browser profile using IndexedDB; they are not uploaded to a server. The Windows desktop export path still uses FFmpeg installed on the PC and exports the selected source video clip only.
 
 ## Future milestones
 - Browser MP4 rendering
