@@ -86,7 +86,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         src: c.file ? URL.createObjectURL(c.file) : (isDesktop ? convertFileSrc(c.path) : c.src)
       }));
       setClips(restored);
-      setNotice("Project restored from this device.");
+      setNotice(isDesktop ? "Project restored from local files on this PC." : "Project timeline restored. Re-import its source media in this browser session.");
     }).catch(() => {
       if (alive) setNotice("Local project storage is unavailable in this browser.");
     }).finally(() => { if (alive) setProjectReady(true); });
@@ -531,7 +531,7 @@ export default function App() {
     </header>
     <section className="library-content">
       <div className="library-welcome">
-        <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru.</p></div>
+        <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut menyimpan susunan proyek; media sumber tetap di perangkatmu.</p></div>
         <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
       </div>
       <div className="library-toolbar">
