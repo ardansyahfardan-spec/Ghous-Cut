@@ -131,7 +131,7 @@ button:focus-visible{outline:2px solid #c18af0;outline-offset:2px}
 .library-account{display:flex;align-items:center;gap:8px;color:#92899e;font-size:11px}.library-online{width:7px;height:7px;border-radius:50%;background:#8bd4a9;box-shadow:0 0 9px #8bd4a966}
 .library-content{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:54px 0 80px}
 .library-welcome{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.library-kicker{color:#aa85c9;font:9px 'DM Mono';letter-spacing:1.8px}
-.library-welcome h1{margin:8px 0 5px;font-size:34px;letter-spacing:-1.4px}.library-welcome p{margin:0;color:#928a9e;font-size:13px}
+.library-welcome h1{margin:8px 0 5px;font-size:34px;letter-spacing:-1.4px}.library-welcome p{margin:0;color:#928a9e;font-size:13px}.library-welcome-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .new-project-button{min-height:43px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:0 18px;border:0;border-radius:9px;background:linear-gradient(110deg,#9855d2,#b96de4);color:white;font-size:12px;font-weight:800;box-shadow:0 8px 24px #9a59ce2c}
 .new-project-button:hover{filter:brightness(1.12);transform:translateY(-1px)}.new-project-button.secondary{margin-top:12px;background:#292033;border:1px solid #604477;box-shadow:none}
 .library-toolbar{display:flex;gap:12px;margin:34px 0 30px}.project-search{height:42px;display:flex;align-items:center;gap:10px;flex:1;max-width:420px;padding:0 13px;border:1px solid #302b3b;border-radius:8px;background:#15131d;color:#8f849d}.project-search input{width:100%;border:0;outline:0;background:transparent;color:#eee7f6;font:12px 'DM Sans'}.project-search input::placeholder{color:#746d7d}
