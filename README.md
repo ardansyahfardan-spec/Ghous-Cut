@@ -1,37 +1,38 @@
 # Ghous Cut
 
-A Windows-first desktop video editor MVP built with Tauri 2, React, TypeScript and FFmpeg.
+A browser-first video editing workspace built with React, TypeScript and Vite, with a Tauri desktop wrapper retained for a later Windows release.
 
-## Included in this first build
-- Import video, image and audio files
+## Browser editor milestone
+- Import local video, image and audio files in the browser
 - Three-track timeline (video, overlay, audio)
-- Select and arrange clips on the timeline
-- Split clips at the playhead
-- Trim the selected clip from either side of the playhead
+- Select, arrange, split and trim clips
 - Preview video, image and audio assets
-- Export the selected video clip to MP4 (H.264/AAC)
-- Optional FFmpeg audio denoising during export
+- Dark editing workspace designed for desktop browsers
 
-## Important scope note
-This is a working first milestone, not a full CapCut replacement. The timeline supports clip organization and editing controls, while the first export pipeline renders the selected source video clip and its in/out range. Full multi-clip compositing, transitions, keyframes, multicam synchronization, AI background removal and automatic subtitles are future milestones.
+**Current browser limitation:** files are previewed locally in the browser session. MP4 rendering is not yet available in the web build. The Windows desktop export path still uses FFmpeg installed on the PC and exports the selected source video clip only.
 
-## Requirements
-- Windows 10/11
-- Node.js 20+
-- Rust stable toolchain
-- Microsoft C++ Build Tools
-- WebView2 Runtime
-- FFmpeg installed and available as `ffmpeg` on PATH
+## Future milestones
+- Browser MP4 rendering
+- Full multi-clip timeline compositing, transitions and keyframes
+- Multicam synchronization
+- Better audio cleanup and AI-assisted tools
+- Cloud project saving and collaboration
 
-## Run
-```powershell
+## Run locally
+```bash
 npm install
-npm run tauri dev
+npm run dev
 ```
 
-## Build Windows installer
+## Build
+```bash
+npm run build
+```
+
+## Windows desktop build
 ```powershell
+npm run tauri dev
 npm run tauri build
 ```
 
-The export action requires FFmpeg to be installed. If FFmpeg is missing, the app displays the process error.
+Windows export requires FFmpeg installed and available as `ffmpeg` on PATH.
