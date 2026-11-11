@@ -398,7 +398,7 @@ export default function App() {
     try {
       const root = document.documentElement as HTMLElement & { requestFullscreen?: () => Promise<void> };
       if (!document.fullscreenElement && root.requestFullscreen) await root.requestFullscreen();
-      const orientation = screen.orientation as (ScreenOrientation & { lock?: (value: "landscape") => Promise<void> }) | undefined;
+      const orientation = window.screen.orientation as (ScreenOrientation & { lock?: (value: "landscape") => Promise<void> }) | undefined;
       await orientation?.lock?.("landscape");
     } catch { /* The user can rotate manually on browsers that disallow screen locking. */ }
   };
