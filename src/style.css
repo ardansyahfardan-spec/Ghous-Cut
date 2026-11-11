@@ -73,3 +73,38 @@
   .workspace{display:none}
   .topbar,.statusbar{opacity:.25;pointer-events:none}
 }
+
+
+/* Refined icon language: consistent Lucide weight, contrast and touch feedback */
+.brand-mark{background:linear-gradient(145deg,#9b5de5,#6f42c1);box-shadow:0 5px 18px #8b5cf633}
+.brand-mark svg{width:19px;height:19px;stroke-width:2.1}
+.icon-btn,.transport-btn,.tool-btn{transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}
+.icon-btn{width:34px;height:34px;border-radius:9px;background:#1c1d2a;border-color:#393449;color:#cbb0e8}
+.icon-btn svg{width:16px;height:16px;stroke-width:1.9}
+.icon-btn:hover{background:#292238;border-color:#9b70c4;color:#f0dfff;transform:translateY(-1px)}
+.icon-btn:active,.tool-btn:active{transform:scale(.96)}
+.tool-btn{min-height:32px;border-radius:8px}
+.tool-btn svg{width:15px;height:15px;stroke-width:1.9}
+.tool-btn.danger-tool:hover{background:#321d27;border-color:#a74e68;color:#ffb5c2}
+.asset-icon,.selected-file-icon{border-radius:9px}
+.asset-icon svg,.selected-file-icon svg{width:17px;height:17px;stroke-width:1.9}
+.asset-icon.video,.selected-file-icon.video{background:#302342;color:#d6a6ff}
+.asset-icon.image,.selected-file-icon.image{background:#1d3541;color:#83d8ec}
+.asset-icon.audio,.selected-file-icon.audio{background:#3a2d22;color:#f2c17e}
+.transport-btn{width:32px;height:32px;display:grid;place-items:center;border-radius:8px}
+.transport-btn svg{width:16px;height:16px;stroke-width:1.9}
+.transport-btn:hover{background:#252333;color:#e5c8ff}
+.play-btn{box-shadow:0 4px 16px #b66de544}
+.play-btn svg{width:15px;height:15px;stroke-width:2.2}
+.btn svg{flex:none;stroke-width:1.9}
+.btn.ghost:hover{border-color:#8d68b0;background:#211c2c;color:#ead8ff}
+.btn.primary svg{filter:drop-shadow(0 1px 2px #0004)}
+.orientation-icon{box-shadow:inset 0 0 0 1px #65478355,0 8px 26px #a855f722}
+.orientation-icon svg:first-child{stroke-width:1.8}
+.orientation-icon svg+svg{stroke-width:2.2}
+button:focus-visible{outline:2px solid #c18af0;outline-offset:2px}
+@media (max-width:900px) and (orientation:landscape){
+  .icon-btn{width:30px;height:30px}
+  .tool-btn{min-height:27px}
+  .tool-btn svg,.transport-btn svg{width:13px;height:13px}
+}
