@@ -39,6 +39,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const clipClipboard = useRef<Clip[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [mutedTracks, setMutedTracks] = useState<number[]>([]);
   const selectionAnchor = useRef<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -134,7 +135,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
     null;
   const currentPreview = activeVisualClips[activeVisualClips.length - 1] || activeAudioClips[0] || null;
   const activeMediaKey = [...activeVisualClips, ...activeAudioClips]
-    .filter(c => c.kind === "video" || c.kind === "audio").map(c => [c.id, c.src, c.start, c.sourceIn, c.duration, c.volume ?? 1].join(":")).join("|");
+    .filter(c => c.kind === "video" || c.kind === "audio").map(c => [c.id, c.src, c.start, c.sourceIn, c.duration, c.volume ?? 1].join(":")).join("|") + "|muted:" + mutedTracks.join(",");
   const duration = Math.max(30, ...clips.map(c => c.start + c.duration + 2));
   const scale = SCALE * zoom;
   const selectedSrc = currentPreview?.src || "";
@@ -194,7 +195,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       if ((!playing || !isClock || clockChanged) && Math.abs(element.currentTime - target) > threshold) {
         try { element.currentTime = Math.min(target, Number.isFinite(element.duration) ? element.duration : target); } catch { /* Metadata may not be ready yet. */ }
       }
-      element.volume = Math.max(0, Math.min(1, clip.volume ?? 1));
+      element.volume = mutedTracks.includes(clip.track) ? 0 : Math.max(0, Math.min(1, clip.volume ?? 1));
       if (playing && element.paused) {
         void element.play().catch(() => setNotice("Salah satu media tidak dapat diputar. Periksa format atau codec file tersebut."));
       } else if (!playing && !element.paused) {
@@ -640,7 +641,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
               </div>
             </div>
             {TRACKS.map(t => <div className="track-row" key={t.id}>
-              <div className="track-label"><t.icon size={15}/><div><strong>{t.name}</strong><small>{t.hint}</small></div></div>
+              <div className="track-label"><t.icon size={15}/><div><strong>{t.name}</strong><small>{t.hint}</small></div><button type="button" className={`track-mute ${mutedTracks.includes(t.id)?"muted":""}`} title={mutedTracks.includes(t.id)?"Unmute track":"Mute track"} aria-label={mutedTracks.includes(t.id)?"Unmute "+t.name:"Mute "+t.name} onClick={e=>{e.stopPropagation();setMutedTracks(old=>old.includes(t.id)?old.filter(id=>id!==t.id):[...old,t.id]);}}>{mutedTracks.includes(t.id)?"M":"M"}</button></div>
               <div className="track-lane" data-track={t.id} style={{width:Math.max(800,duration*scale),backgroundSize:scale+"px 100%"}} onClick={e=>{
                 if(e.target===e.currentTarget){
                   const r=e.currentTarget.getBoundingClientRect();
