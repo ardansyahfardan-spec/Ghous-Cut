@@ -50,6 +50,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const [projectReady, setProjectReady] = useState(false);
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const mediaRefs = useRef<Map<string, HTMLMediaElement>>(new Map());
+  const lastClockClipId = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = "__TAURI_INTERNALS__" in window;
   const hasLocalBrowserFilesystem = browserPersistenceAvailable();
@@ -169,8 +170,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
       const element = mediaRefs.current.get(clip.id);
       if (!element) return;
       const target = Math.max(0, clip.sourceIn + playhead - clip.start);
-      const threshold = playing && clip.id !== clockClip?.id ? 0.35 : 0.08;
-      if ((!playing || clip.id !== clockClip?.id) && Math.abs(element.currentTime - target) > threshold) {
+      const isClock = clip.id === clockClip?.id;
+      const clockChanged = isClock && lastClockClipId.current !== clip.id;
+      const threshold = playing && !isClock ? 0.35 : 0.08;
+      // When playback crosses an edit point, the new master may have been paused
+      // at an old source position. Align it before it takes over the timeline clock.
+      if ((!playing || !isClock || clockChanged) && Math.abs(element.currentTime - target) > threshold) {
         try { element.currentTime = Math.min(target, Number.isFinite(element.duration) ? element.duration : target); } catch { /* Metadata may not be ready yet. */ }
       }
       element.volume = Math.max(0, Math.min(1, clip.volume ?? 1));
@@ -180,6 +185,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
         element.pause();
       }
     });
+    lastClockClipId.current = clockClip?.id ?? null;
   }, [playhead, playing, activeMediaKey, clockClip?.id]);
 
   useEffect(() => {
