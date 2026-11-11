@@ -347,21 +347,28 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   };
 
   const exportVideo = async () => {
-    if (!active) return setNotice("Select a video clip to export.");
-    if (active.kind !== "video") return setNotice("The first export milestone exports a selected video clip. Select a video track clip.");
-    if (!isDesktop) return setNotice("MP4 export is available in the Windows desktop build with FFmpeg installed.");
+    if (!clips.length) return setNotice("Tambahkan media ke timeline sebelum export.");
+    if (!isDesktop) return setNotice("MP4 export tersedia di aplikasi Windows Ghous Cut dengan FFmpeg terpasang.");
     try {
-      const output = await save({ defaultPath: "ghous-cut-export.mp4", filters: [{ name: "MP4 Video", extensions: ["mp4"] }] });
+      const output = await save({ defaultPath: `ghous-cut-${projectName.replace(/[^a-z0-9-_ ]/gi, "").trim() || "project"}.mp4`, filters: [{ name: "MP4 Video", extensions: ["mp4"] }] });
       if (!output) return;
       setExporting(true);
-      setNotice("Rendering selected clip with FFmpeg…");
-      const result = await invoke<string>("export_clip", {
-        input: active.path, output, start: active.sourceIn, duration: active.duration, denoise, volume: active.volume ?? 1
+      setNotice("Rendering seluruh timeline multitrack dengan FFmpeg…");
+      const exportClips = clips.map(({ id, name, path, kind, track, start, sourceIn, duration, volume }) => ({
+        id, name, path, kind, track, start, sourceIn, duration, volume: volume ?? 1
+      }));
+      const result = await invoke<string>("export_timeline", {
+        clips: exportClips,
+        output,
+        aspectRatio,
+        denoise
       });
       setNotice(result);
     } catch (e) {
-      setNotice(`Export failed: ${String(e)}`);
-    } finally { setExporting(false); }
+      setNotice(`Export gagal: ${String(e)}`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const togglePlayback = () => {
