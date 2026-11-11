@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { loadLocalProject, saveLocalProject } from "./projectStorage";
+import { createProject, deleteProject, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
-  Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Smartphone, RotateCw
+  Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Smartphone, RotateCw, Search, Clock3, MoreVertical, ArrowLeft, Film as FilmIcon
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
@@ -31,7 +31,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-export default function App() {
+function EditorWorkspace({ projectId, projectName, onBack }: { projectId: string; projectName: string; onBack: () => void }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
@@ -78,24 +78,24 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    loadLocalProject<Clip>().then(project => {
+    loadProject<Clip>(projectId).then(project => {
       if (!alive || !project) return;
       const restored = project.clips.map(c => ({
         ...c,
         src: c.file ? URL.createObjectURL(c.file) : (isDesktop ? convertFileSrc(c.path) : c.src)
       }));
       setClips(restored);
-      setNotice("Local project restored from this device.");
+      setNotice("Project restored from this device.");
     }).catch(() => {
       if (alive) setNotice("Local project storage is unavailable in this browser.");
     }).finally(() => { if (alive) setProjectReady(true); });
     return () => { alive = false; };
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectReady) return;
-    saveLocalProject(clips).catch(() => setNotice("Could not autosave this project in local browser storage."));
-  }, [clips, projectReady]);
+    saveProject(projectId, projectName, clips).catch(() => setNotice("Could not autosave this project in local browser storage."));
+  }, [clips, projectReady, projectId, projectName]);
 
   const active = clips.find(c => c.id === selected) || null;
   const activeAtPlayhead = clips.find(c => c.track === 0 && playhead >= c.start && playhead <= c.start + c.duration);
@@ -240,8 +240,8 @@ export default function App() {
       </div>
     </div>}
     <header className="topbar">
-      <div className="brand"><div className="brand-mark"><Clapperboard size={19}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
-      <div className="project-name"><span className="live-dot"/> Untitled Project <ChevronDown size={14}/></div>
+      <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><GhostMark size={21}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
+      <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
       <div className="top-actions"><button className="btn ghost" onClick={importMedia}><FolderOpen size={15}/> Import</button><button className="btn primary" onClick={exportVideo} disabled={exporting}><Download size={15}/>{exporting ? "Rendering…" : "Export"}</button></div>
     </header>
 
@@ -338,4 +338,142 @@ export default function App() {
       e.currentTarget.value="";
     }}/>
   </div>;
+}
+
+type ProjectCard = StoredProject<Clip>;
+function GhostMark({ size = 28 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+    <path d="M12 52V29C12 16.85 20.95 7 32 7s20 9.85 20 22v23c0 2.2-2.55 3.45-4.3 2.1l-5.3-4.1-6.1 4.5a3.7 3.7 0 0 1-4.5 0l-6.1-4.5-5.3 4.1C18.55 55.45 16 54.2 16 52" fill="currentColor"/>
+    <ellipse cx="24" cy="29" rx="3.2" ry="4.4" fill="#171321"/>
+    <ellipse cx="40" cy="29" rx="3.2" ry="4.4" fill="#171321"/>
+    <path d="M27 39c3.2 3.2 6.8 3.2 10 0" stroke="#171321" strokeWidth="2.8" strokeLinecap="round"/>
+    <path d="M32 2v4M7 19l4 2M57 19l-4 2" stroke="#D9B8FF" strokeWidth="2.5" strokeLinecap="round"/>
+  </svg>;
+}
+
+export default function App() {
+  const [screen, setScreen] = useState<"splash" | "library" | "editor">("splash");
+  const [projects, setProjects] = useState<ProjectCard[]>([]);
+  const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
+  const [search, setSearch] = useState("");
+  const [sortMode, setSortMode] = useState<"recent" | "name">("recent");
+  const [creating, setCreating] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [storageError, setStorageError] = useState("");
+
+  const refreshProjects = async () => {
+    try {
+      const items = await listProjects();
+      setProjects(items);
+      setStorageError("");
+    } catch {
+      setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
+    }
+  };
+
+  useEffect(() => {
+    let alive = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const items = await listProjects();
+        if (alive) setProjects(items);
+      } catch {
+        if (alive) setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
+      }
+      if (alive) setScreen("library");
+    }, 1250);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, []);
+
+  const startProject = async () => {
+    const name = draftName.trim() || "Proyek Tanpa Judul";
+    const now = Date.now();
+    const project: ProjectCard = { id: crypto.randomUUID(), name, clips: [], createdAt: now, updatedAt: now };
+    try {
+      await createProject(project);
+      setProjects(old => [project, ...old]);
+      setActiveProject(project);
+      setCreating(false);
+      setDraftName("");
+      setScreen("editor");
+    } catch {
+      setStorageError("Proyek gagal dibuat. Periksa izin penyimpanan browser.");
+    }
+  };
+
+  const openProject = async (project: ProjectCard) => {
+    const full = await loadProject<Clip>(project.id);
+    setActiveProject(full || project);
+    setScreen("editor");
+  };
+
+  const removeProject = async (project: ProjectCard) => {
+    if (!window.confirm(`Hapus proyek "${project.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+    await deleteProject(project.id);
+    await refreshProjects();
+  };
+
+  const visibleProjects = projects
+    .filter(project => project.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => sortMode === "recent" ? b.updatedAt - a.updatedAt : a.name.localeCompare(b.name));
+
+  const formatDate = (value: number) => new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+
+  if (screen === "splash") return <main className="splash-screen">
+    <div className="splash-glow"/>
+    <div className="splash-brand-mark"><GhostMark size={76}/></div>
+    <div className="splash-title">GHOUS <span>CUT</span></div>
+    <div className="splash-subtitle">VIDEO EDITOR</div>
+    <div className="splash-loading"><i/></div>
+    <div className="splash-caption">Preparing your creative workspace</div>
+  </main>;
+
+  if (screen === "editor" && activeProject) return <EditorWorkspace
+    key={activeProject.id}
+    projectId={activeProject.id}
+    projectName={activeProject.name}
+    onBack={async () => { await refreshProjects(); setScreen("library"); }}
+  />;
+
+  return <main className="project-library">
+    <header className="library-topbar">
+      <div className="library-brand"><span className="library-mark"><GhostMark size={25}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
+      <div className="library-account"><span className="library-online"/><span>Local workspace</span></div>
+    </header>
+    <section className="library-content">
+      <div className="library-welcome">
+        <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru.</p></div>
+        <button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button>
+      </div>
+      <div className="library-toolbar">
+        <label className="project-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari proyek..." /></label>
+        <select className="project-sort" value={sortMode} onChange={e => setSortMode(e.target.value as "recent" | "name")} aria-label="Urutkan proyek">
+          <option value="recent">Terakhir dibuka</option><option value="name">Nama proyek</option>
+        </select>
+      </div>
+      {storageError && <div className="storage-warning">{storageError}</div>}
+      <div className="project-section-heading"><h2>Semua proyek</h2><span>{visibleProjects.length} proyek</span></div>
+      {visibleProjects.length === 0 ? <div className="library-empty">
+        <div className="empty-ghost"><GhostMark size={52}/></div>
+        <h3>{search ? "Proyek tidak ditemukan" : "Belum ada proyek"}</h3>
+        <p>{search ? "Coba kata pencarian lain." : "Proyek video yang kamu buat akan tersimpan di sini."}</p>
+        {!search && <button className="new-project-button secondary" onClick={() => setCreating(true)}><Plus size={16}/> Buat proyek pertama</button>}
+      </div> : <div className="project-grid">
+        {visibleProjects.map(project => <article className="project-card" key={project.id}>
+          <button className="project-open" onClick={() => void openProject(project)} aria-label={`Buka ${project.name}`}>
+            <div className="project-thumbnail"><div className="thumbnail-glow"/><GhostMark size={42}/><span className="thumbnail-play"><FilmIcon size={17}/></span></div>
+            <div className="project-card-info"><strong>{project.name}</strong><span><Clock3 size={12}/> {formatDate(project.updatedAt)}</span></div>
+          </button>
+          <div className="project-card-actions"><span>{project.clips.length} media</span><button onClick={() => void removeProject(project)} title="Hapus proyek"><MoreVertical size={17}/></button></div>
+        </article>)}
+      </div>}
+    </section>
+    {creating && <div className="project-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setCreating(false); }}>
+      <form className="project-modal" onSubmit={e => { e.preventDefault(); void startProject(); }}>
+        <div className="modal-heading"><div><span className="library-kicker">NEW CREATION</span><h2>Buat proyek baru</h2></div><button type="button" onClick={() => setCreating(false)} aria-label="Tutup"><X size={18}/></button></div>
+        <label className="project-name-field">Nama proyek<input autoFocus value={draftName} onChange={e => setDraftName(e.target.value)} placeholder="Contoh: Video Liburan" maxLength={70}/></label>
+        <div className="modal-actions"><button type="button" className="cancel-project" onClick={() => setCreating(false)}>Batal</button><button type="submit" className="new-project-button"><Plus size={16}/> Buat & Edit</button></div>
+      </form>
+    </div>}
+  </main>;
 }
