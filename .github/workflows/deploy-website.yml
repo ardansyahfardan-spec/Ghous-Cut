@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -32,6 +34,21 @@ jobs:
         run: npm run build
         env:
           GITHUB_PAGES: "true"
+      - name: Verify built application and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          grep -q 'id="root"' dist/index.html
+          JS_PATH="$(grep -oE 'src="[^"]+\\.js"' dist/index.html | head -n 1 | cut -d '"' -f 2)"
+          CSS_PATH="$(grep -oE 'href="[^"]+\\.css"' dist/index.html | head -n 1 | cut -d '"' -f 2)"
+          test -n "$JS_PATH"
+          test -n "$CSS_PATH"
+          JS_FILE="${JS_PATH#/Ghous-Cut/}"
+          CSS_FILE="${CSS_PATH#/Ghous-Cut/}"
+          test -s "dist/$JS_FILE"
+          test -s "dist/$CSS_FILE"
+          echo "Verified HTML, JavaScript bundle: $JS_PATH, CSS bundle: $CSS_PATH"
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -48,3 +65,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify published application
+        shell: bash
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl -fsSL "${SITE_URL%/}/" -o /tmp/ghous-cut-index.html && grep -q 'id="root"' /tmp/ghous-cut-index.html; then
+              break
+            fi
+            sleep 5
+          done
+          test -s /tmp/ghous-cut-index.html
+          grep -q 'id="root"' /tmp/ghous-cut-index.html
+          JS_PATH="$(grep -oE 'src="[^"]+\\.js"' /tmp/ghous-cut-index.html | head -n 1 | cut -d '"' -f 2)"
+          CSS_PATH="$(grep -oE 'href="[^"]+\\.css"' /tmp/ghous-cut-index.html | head -n 1 | cut -d '"' -f 2)"
+          test -n "$JS_PATH"
+          test -n "$CSS_PATH"
+          curl -fsS "${SITE_URL%/}/${JS_PATH#/Ghous-Cut/}" -o /dev/null
+          curl -fsS "${SITE_URL%/}/${CSS_PATH#/Ghous-Cut/}" -o /dev/null
+          echo "Published Ghous Cut HTML, JavaScript, and CSS are reachable."
