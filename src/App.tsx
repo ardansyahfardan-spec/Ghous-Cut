@@ -213,7 +213,7 @@ export default function App() {
             <span className="asset-meta"><strong>{c.name}</strong><small>{c.kind.toUpperCase()} · {fmt(c.duration)}</small></span>
           </button>)}
         </div>
-        <div className="storage-note"><span className="storage-dot"/> Local project · Files stay on your PC</div>
+        <div className="storage-note"><span className="storage-dot"/> {isDesktop ? "Local project · Files stay on your PC" : "Auto-save · This browser & device"}</div>
       </aside>
 
       <section className="center-panel">
