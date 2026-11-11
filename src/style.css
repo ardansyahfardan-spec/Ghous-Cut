@@ -939,3 +939,53 @@ body.library-page #root {
   .preview-panel, .timeline-panel { min-height: 0; max-height: none; height: auto; }
   .timeline-toolbar { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "title zoom" "tools tools"; }
 }
+
+
+/* Portrait editing dock: move secondary actions below the timeline, not into a crowded top row. */
+.mobile-edit-dock { display: none; }
+@media (max-width: 760px) and (orientation: portrait) {
+  .timeline-toolbar .edit-tools { display: none !important; }
+  .timeline-toolbar { flex-wrap: nowrap; min-height: 42px; }
+  .timeline-title { flex: 0 1 auto; }
+  .zoom-control { margin-left: auto; }
+  .mobile-edit-dock {
+    display: flex;
+    flex: 0 0 62px;
+    min-height: 62px;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 8px calc(5px + env(safe-area-inset-bottom));
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid var(--gc-border);
+    background: var(--gc-surface);
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .mobile-edit-dock::-webkit-scrollbar { display: none; }
+  .mobile-tool-btn {
+    flex: 0 0 54px;
+    width: 54px;
+    min-width: 54px;
+    height: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--gc-text);
+    font: 500 9px 'DM Sans', sans-serif;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-tool-btn:active { background: var(--gc-surface-raised); transform: scale(.96); }
+  .mobile-tool-btn svg { width: 18px; height: 18px; stroke-width: 1.9; }
+  .mobile-tool-btn.danger-tool { color: var(--gc-red-soft); }
+  .timeline-panel { flex-basis: 47%; max-height: 52%; }
+  .timeline-scroll { min-height: 90px; }
+}
