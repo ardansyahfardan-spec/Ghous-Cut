@@ -37,7 +37,7 @@ export async function saveProject<T>(id: string, name: string, clips: T[]): Prom
   };
   if (isDesktop()) {
     const previous = projectSaveQueues.get(id) ?? Promise.resolve();
-    const next = previous.catch(() => undefined).then(() => invoke("save_project", { project }));
+    const next = previous.catch(() => undefined).then(() => invoke<void>("save_project", { project }));
     projectSaveQueues.set(id, next);
     try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
   } else {
