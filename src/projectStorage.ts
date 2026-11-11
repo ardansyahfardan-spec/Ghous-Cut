@@ -15,6 +15,12 @@ const browserProjects = new Map<string, StoredProject>();
 const projectSaveQueues = new Map<string, Promise<void>>();
 const isDesktop = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+export function browserPersistenceAvailable(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const storage = (navigator as Navigator & { storage?: { getDirectory?: () => Promise<unknown> } }).storage;
+  return typeof storage?.getDirectory === "function";
+}
+
 type OpfsWritable = { write(data: string | Blob | ArrayBuffer | Uint8Array): Promise<void>; close(): Promise<void> };
 type OpfsFileHandle = { name: string; kind: "file"; getFile(): Promise<File>; createWritable(): Promise<OpfsWritable> };
 type OpfsDirectoryHandle = {
@@ -95,8 +101,8 @@ async function restoreBrowserProject<T>(project: StoredProject<T>, previewOnly =
   }
   let previewRestored = false;
   const clips = await Promise.all(project.clips.map(async rawClip => {
-    const clip = rawClip as T & { opfsMedia?: string; name?: string };
-    if (!clip.opfsMedia || (previewOnly && previewRestored)) return clip;
+    const clip = rawClip as T & { opfsMedia?: string; name?: string; kind?: string };
+    if (!clip.opfsMedia || (previewOnly && (previewRestored || clip.kind === "audio"))) return clip;
     try {
       const handle = await mediaDirectory.getFileHandle(clip.opfsMedia);
       const file = await handle.getFile();
@@ -129,7 +135,7 @@ export async function listProjects(): Promise<StoredProject[]> {
   const projects: StoredProject[] = [];
   for await (const entry of directory.values()) {
     if (entry.kind !== "file" || !entry.name.endsWith(".json")) continue;
-    const project = await readStoredProject(entry as OpfsFileHandle, true);
+    const project = await readStoredProject(await (entry as OpfsFileHandle).getFile(), true);
     if (project) projects.push(project);
   }
   return sortRecent(projects);
