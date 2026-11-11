@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
+type ProjectAspectRatio = "16:9" | "9:16" | "1:1";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
   track: number; start: number; sourceIn: number; duration: number; volume?: number; file?: File;
@@ -31,7 +32,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, onBack }: { projectId: string; projectName: string; onBack: () => void }) {
+function EditorWorkspace({ projectId, projectName, aspectRatio, onBack }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
@@ -262,7 +263,7 @@ function EditorWorkspace({ projectId, projectName, onBack }: { projectId: string
 
       <section className="center-panel">
         <div className="preview-panel panel">
-          <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><span>16:9</span><span>FIT</span></div></div>
+          <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><span>{aspectRatio}</span><span>FIT</span></div></div>
           <div className="preview-stage">
             {!currentPreview && <div className="preview-empty"><div className="preview-logo"><Clapperboard size={30}/></div><strong>Your story starts here</strong><span>Import a clip and select it in the timeline</span></div>}
             {currentPreview?.kind === "video" && <video ref={previewRef} src={currentPreview.src} className="preview-media" controls={false} onLoadedMetadata={e => {
@@ -359,6 +360,7 @@ export default function App() {
   const [sortMode, setSortMode] = useState<"recent" | "name">("recent");
   const [creating, setCreating] = useState(false);
   const [draftName, setDraftName] = useState("");
+  const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
   const [phonePortrait, setPhonePortrait] = useState(false);
 
@@ -406,13 +408,14 @@ export default function App() {
   const startProject = async () => {
     const name = draftName.trim() || "Proyek Tanpa Judul";
     const now = Date.now();
-    const project: ProjectCard = { id: crypto.randomUUID(), name, clips: [], createdAt: now, updatedAt: now };
+    const project: ProjectCard = { id: crypto.randomUUID(), name, clips: [], aspectRatio: draftAspectRatio, createdAt: now, updatedAt: now };
     try {
       await createProject(project);
       setProjects(old => [project, ...old]);
       setActiveProject(project);
       setCreating(false);
       setDraftName("");
+      setDraftAspectRatio("16:9");
       setScreen("editor");
     } catch {
       setStorageError("Proyek gagal dibuat. Periksa izin penyimpanan browser.");
@@ -450,6 +453,7 @@ export default function App() {
     key={activeProject.id}
     projectId={activeProject.id}
     projectName={activeProject.name}
+    aspectRatio={activeProject.aspectRatio || "16:9"}
     onBack={async () => { await refreshProjects(); setScreen("library"); }}
   />;
 
@@ -491,6 +495,7 @@ export default function App() {
       <form className="project-modal" onSubmit={e => { e.preventDefault(); void startProject(); }}>
         <div className="modal-heading"><div><span className="library-kicker">NEW CREATION</span><h2>Buat proyek baru</h2></div><button type="button" onClick={() => setCreating(false)} aria-label="Tutup"><X size={18}/></button></div>
         <label className="project-name-field">Nama proyek<input autoFocus value={draftName} onChange={e => setDraftName(e.target.value)} placeholder="Contoh: Video Liburan" maxLength={70}/></label>
+        <label className="project-name-field">Rasio kanvas<select value={draftAspectRatio} onChange={e => setDraftAspectRatio(e.target.value as ProjectAspectRatio)}><option value="16:9">16:9 · Landscape</option><option value="9:16">9:16 · Portrait</option><option value="1:1">1:1 · Square</option></select></label>
         <div className="modal-actions"><button type="button" className="cancel-project" onClick={() => setCreating(false)}>Batal</button><button type="submit" className="new-project-button"><Plus size={16}/> Buat & Edit</button></div>
       </form>
     </div>}
