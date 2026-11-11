@@ -7,11 +7,12 @@ fn export_clip(
     start: f64,
     duration: f64,
     denoise: bool,
+    volume: f64,
 ) -> Result<String, String> {
     if input.trim().is_empty() || output.trim().is_empty() {
         return Err("Input and output paths are required.".into());
     }
-    if !start.is_finite() || !duration.is_finite() || start < 0.0 || duration <= 0.0 {
+    if !start.is_finite() || !duration.is_finite() || !volume.is_finite() || start < 0.0 || duration <= 0.0 || !(0.0..=1.0).contains(&volume) {
         return Err("Invalid clip in/out range.".into());
     }
 
@@ -30,9 +31,12 @@ fn export_clip(
         .arg("-b:a").arg("192k")
         .arg("-movflags").arg("+faststart");
 
-    if denoise {
-        cmd.arg("-af").arg("afftdn=nf=-25");
-    }
+    let audio_filter = if denoise {
+        format!("volume={:.3},afftdn=nf=-25", volume)
+    } else {
+        format!("volume={:.3}", volume)
+    };
+    cmd.arg("-af").arg(audio_filter);
 
     let result = cmd.output().map_err(|e| {
         format!("Could not start FFmpeg. Install FFmpeg and add it to PATH. Details: {e}")
