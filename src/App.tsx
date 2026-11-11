@@ -5,7 +5,8 @@ import { browserPersistenceAvailable, createProject, deleteProject, exportProjec
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
-  Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Smartphone, RotateCw, Search, Clock3, ArrowLeft, Film as FilmIcon, Keyboard, Undo2, Redo2
+  Volume2, WandSparkles, Download, MousePointer2, ChevronDown, Plus, X, Search, Clock3, ArrowLeft, Film as FilmIcon, Keyboard, Undo2, Redo2,
+  Copy, ClipboardPaste, CopyPlus, Save, CircleHelp
 } from "lucide-react";
 
 type MediaKind = "video" | "image" | "audio";
@@ -53,40 +54,11 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
   const suppressClipClick = useRef(false);
   const scrubbing = useRef(false);
   const [projectReady, setProjectReady] = useState(false);
-  const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   const mediaRefs = useRef<Map<string, HTMLMediaElement>>(new Map());
   const lastClockClipId = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isDesktop = "__TAURI_INTERNALS__" in window;
   const hasLocalBrowserFilesystem = browserPersistenceAvailable();
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 900px) and (orientation: portrait)");
-    const update = () => setIsMobilePortrait(media.matches);
-    update();
-    media.addEventListener?.("change", update);
-    return () => media.removeEventListener?.("change", update);
-  }, []);
-
-  const requestLandscape = async () => {
-    const root = document.documentElement as HTMLElement & { requestFullscreen?: () => Promise<void> };
-    try {
-      if (!document.fullscreenElement && root.requestFullscreen) await root.requestFullscreen();
-    } catch {
-      // Fullscreen is optional; continue to attempt orientation lock.
-    }
-    const orientation = screen.orientation as (ScreenOrientation & { lock?: (value: "landscape") => Promise<void> }) | undefined;
-    if (!orientation?.lock) {
-      setNotice("Browser ini belum mendukung penguncian otomatis. Putar HP ke posisi landscape untuk melanjutkan.");
-      return;
-    }
-    try {
-      await orientation.lock("landscape");
-      setNotice("Mode landscape diaktifkan.");
-    } catch {
-      setNotice("Browser menolak penguncian otomatis. Silakan putar HP ke posisi landscape.");
-    }
-  };
 
   useEffect(() => {
     let alive = true;
@@ -517,20 +489,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 
 
   return <div className="app-shell">
-    {isMobilePortrait && <div className="orientation-gate" role="dialog" aria-modal="true" aria-labelledby="orientation-title">
-      <div className="orientation-card">
-        <div className="orientation-icon"><Smartphone size={38}/><RotateCw size={22}/></div>
-        <span className="eyebrow">GHOUS CUT · MOBILE EDITOR</span>
-        <h1 id="orientation-title">Putar perangkat Anda</h1>
-        <p>Ghous Cut menggunakan workspace landscape agar timeline, preview, dan panel editing lebih nyaman digunakan.</p>
-        <button className="btn primary orientation-action" onClick={requestLandscape}><RotateCw size={16}/> Aktifkan landscape</button>
-        <small>Jika layar tidak berputar otomatis, matikan kunci rotasi HP lalu putar perangkat ke samping.</small>
-      </div>
-    </div>}
     <header className="topbar">
       <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><BrandLogo size={22}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
-      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)"><Keyboard size={15}/> Shortcuts</button><button className="btn ghost" onClick={importMedia}><FolderOpen size={15}/> Import</button><button className="btn ghost" onClick={() => void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() })}><Download size={15}/> Save Project</button><button className="btn primary" onClick={exportVideo} disabled={exporting}><Download size={15}/>{exporting ? "Rendering…" : "Export"}</button></div>
+      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost save-action" onClick={() => void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() })} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
     </header>
 
     <main className="workspace">
@@ -613,15 +575,15 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
           <div className="timeline-toolbar">
             <div className="timeline-title"><span className="eyebrow">EDIT</span><h2>Timeline</h2></div>
             <div className="edit-tools">
-              <button className="tool-btn" onClick={splitSelected} title="Split selected clip at playhead"><Scissors size={15}/><span>Split</span></button>
-              <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks at playhead">✂<span>Split all</span></button>
-              <button className="tool-btn" onClick={copySelected} title="Copy selected clips">▢<span>Copy {selectedIds.length>1?selectedIds.length:""}</span></button>
-              <button className="tool-btn" onClick={cutSelected} title="Cut selected clips">✂<span>Cut</span></button>
-              <button className="tool-btn" onClick={pasteClip} title="Paste clips at playhead">▣<span>Paste</span></button>
-              <button className="tool-btn" onClick={duplicateSelected} title="Duplicate selected clip">⧉<span>Duplicate</span></button>
-              <button className="tool-btn" onClick={trimLeft} title="Trim beginning to playhead">◧<span>Trim left</span></button>
-              <button className="tool-btn" onClick={trimRight} title="Trim end to playhead">◨<span>Trim right</span></button>
-              <button className="tool-btn danger-tool" onClick={removeSelected} title="Remove selected clips"><Trash2 size={15}/>{selectedIds.length>1&&<span>{selectedIds.length}</span>}</button>
+              <button className="tool-btn" onClick={splitSelected} title="Split clip" aria-label="Split clip"><Scissors size={16}/><span>Split</span></button>
+              <button className="tool-btn" onClick={splitAllTracks} title="Split all tracks" aria-label="Split all tracks"><Scissors size={16}/><span>All</span></button>
+              <button className="tool-btn" onClick={copySelected} title="Copy clips" aria-label="Copy clips"><Copy size={16}/><span>Copy</span></button>
+              <button className="tool-btn" onClick={cutSelected} title="Cut clips" aria-label="Cut clips"><Scissors size={16}/><span>Cut</span></button>
+              <button className="tool-btn" onClick={pasteClip} title="Paste clips" aria-label="Paste clips"><ClipboardPaste size={16}/><span>Paste</span></button>
+              <button className="tool-btn" onClick={duplicateSelected} title="Duplicate clip" aria-label="Duplicate clip"><CopyPlus size={16}/><span>Duplicate</span></button>
+              <button className="tool-btn" onClick={trimLeft} title="Trim start to playhead" aria-label="Trim start"><Scissors size={16}/><span>Trim L</span></button>
+              <button className="tool-btn" onClick={trimRight} title="Trim end to playhead" aria-label="Trim end"><Scissors size={16}/><span>Trim R</span></button>
+              <button className="tool-btn danger-tool" onClick={removeSelected} title="Delete selected clips" aria-label="Delete selected clips"><Trash2 size={16}/>{selectedIds.length>1&&<span>{selectedIds.length}</span>}</button>
             </div>
             <div className="zoom-control"><button type="button" className="zoom-step" aria-label="Zoom out timeline" onClick={()=>setZoom(v=>Math.max(0.6,Math.round((v-0.1)*10)/10))}>−</button><input aria-label="Timeline zoom" type="range" min="0.6" max="1.8" step="0.1" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/><button type="button" className="zoom-step" aria-label="Zoom in timeline" onClick={()=>setZoom(v=>Math.min(1.8,Math.round((v+0.1)*10)/10))}>+</button><button type="button" className="zoom-reset" onClick={()=>setZoom(1)} title="Reset zoom">100%</button></div>
           </div>
