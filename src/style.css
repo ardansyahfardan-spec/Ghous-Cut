@@ -639,6 +639,7 @@ body.library-page #root {
 
 
 /* Mobile editor: compact, touch-first portrait workspace */
+.mobile-properties-action { display: none; }
 @media (max-width: 760px) {
   html, body { min-width: 0 !important; width: 100%; overflow-x: hidden; }
   .app-shell {
