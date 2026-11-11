@@ -804,6 +804,18 @@ export default function App() {
   const [storageError, setStorageError] = useState("");
   const projectFileInputRef = useRef<HTMLInputElement>(null);
 
+  // The project library uses normal document scrolling. The editor keeps its own
+  // fixed-height landscape workspace, so scope viewport rules to the active screen.
+  useEffect(() => {
+    const isLibrary = screen === "library";
+    document.documentElement.classList.toggle("library-page", isLibrary);
+    document.body.classList.toggle("library-page", isLibrary);
+    return () => {
+      document.documentElement.classList.remove("library-page");
+      document.body.classList.remove("library-page");
+    };
+  }, [screen]);
+
   const exportProject = async (project: StoredProject<Clip>) => {
     try {
       const saved = await exportProjectFile(project);
