@@ -531,6 +531,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
                 else mediaRefs.current.delete(clip.id);
               }} src={clip.src} preload="auto"
                 onLoadedMetadata={e => {
+                  const target = Math.max(0, clip.sourceIn + playhead - clip.start);
+                  if (!playing) {
+                    try { e.currentTarget.currentTime = Math.min(target, e.currentTarget.duration); } catch { /* Wait for media readiness. */ }
+                  }
                   const d = e.currentTarget.duration;
                   if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
                 }}
