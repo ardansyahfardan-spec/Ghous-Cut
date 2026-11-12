@@ -270,6 +270,23 @@ async function browserMediaBytes(clip: PortableClip): Promise<Uint8Array | null>
 
 export async function exportProjectFile<T>(project: StoredProject<T>): Promise<boolean> {
   const safeName = safeProjectName(project.name);
+  if (isDesktop()) {
+    const path = await saveDialog({
+      defaultPath: `${safeName}.ghcut`,
+      filters: [{ name: "Ghous Cut Project", extensions: ["ghcut"] }]
+    });
+    if (!path) return false;
+    const portableProject = {
+      ...project,
+      clips: project.clips.map(rawClip => {
+        const clip = rawClip as T & PortableClip;
+        const { file: _file, src: _src, ...metadata } = clip;
+        return { ...metadata, src: "" };
+      })
+    };
+    await invoke("export_project_archive", { project: portableProject, outputPath: path });
+    return true;
+  }
   const media: Record<string, Uint8Array> = {};
   const portableClips = await Promise.all(project.clips.map(async (clip, index) => {
     const item = clip as T & PortableClip;
@@ -296,16 +313,6 @@ export async function exportProjectFile<T>(project: StoredProject<T>): Promise<b
   }, { level: 1 });
   const blob = new Blob([archive], { type: "application/vnd.ghouscut.project+zip" });
 
-  if (isDesktop()) {
-    const path = await saveDialog({
-      defaultPath: `${safeName}.ghcut`,
-      filters: [{ name: "Ghous Cut Project", extensions: ["ghcut"] }]
-    });
-    if (!path) return false;
-    await invoke("write_project_file", { path, content: Array.from(archive) });
-    return true;
-  }
-
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -313,6 +320,14 @@ export async function exportProjectFile<T>(project: StoredProject<T>): Promise<b
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   return true;
+}
+
+export async function importProjectArchivePath(archivePath: string, ownerId: string): Promise<StoredProject> {
+  if (!isDesktop()) throw new Error("Native archive import is only available in the Windows app.");
+  return await invoke<StoredProject>("import_project_archive", {
+    archivePath,
+    ownerId: safeOwnerId(ownerId)
+  });
 }
 
 export async function importProjectFile(file: File, ownerId: string): Promise<StoredProject> {
