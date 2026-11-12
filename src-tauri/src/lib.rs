@@ -1,9 +1,15 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, io::{copy, Read, Write}, path::PathBuf, process::Command};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-fn projects_directory(app: &AppHandle) -> Result<PathBuf, String> {
+mod google_oauth;
+
+fn projects_directory(app: &AppHandle, owner_id: &str) -> Result<PathBuf, String> {
+    if !valid_project_id(owner_id) { return Err("Invalid account ID for local storage.".into()); }
     let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
+    directory.push("users");
+    directory.push(owner_id);
     directory.push("projects");
     fs::create_dir_all(&directory).map_err(|e| format!("Cannot create local projects folder: {e}"))?;
     Ok(directory)
@@ -13,9 +19,41 @@ fn valid_project_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+fn project_media_directory(app: &AppHandle, owner_id: &str, project_id: &str) -> Result<PathBuf, String> {
+    if !valid_project_id(owner_id) || !valid_project_id(project_id) {
+        return Err("Invalid account or project ID for local media storage.".into());
+    }
+    let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
+    directory.push("users");
+    directory.push(owner_id);
+    directory.push("media");
+    directory.push(project_id);
+    fs::create_dir_all(&directory).map_err(|e| format!("Cannot create local media folder: {e}"))?;
+    Ok(directory)
+}
+
+fn recover_project_backups(directory: &PathBuf) -> Result<(), String> {
+    for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let backup = entry.path();
+        let Some(name) = backup.file_name().and_then(|value| value.to_str()) else { continue; };
+        if !name.ends_with(".json.bak") { continue; }
+        let mut original_name = name.to_string();
+        original_name.truncate(original_name.len() - 4);
+        let original = directory.join(original_name);
+        if original.exists() {
+            fs::remove_file(&backup).map_err(|e| format!("Cannot clear stale project backup: {e}"))?;
+        } else {
+            fs::rename(&backup, &original).map_err(|e| format!("Cannot recover previous local project save: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
-fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
-    let directory = projects_directory(&app)?;
+fn list_projects(app: AppHandle, owner_id: String) -> Result<Vec<Value>, String> {
+    let directory = projects_directory(&app, &owner_id)?;
+    recover_project_backups(&directory)?;
     let mut projects = Vec::new();
     for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -27,9 +65,11 @@ fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
 }
 
 #[tauri::command]
-fn load_project(app: AppHandle, id: String) -> Result<Option<Value>, String> {
+fn load_project(app: AppHandle, id: String, owner_id: String) -> Result<Option<Value>, String> {
     if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
-    let mut path = projects_directory(&app)?;
+    let directory = projects_directory(&app, &owner_id)?;
+    recover_project_backups(&directory)?;
+    let mut path = directory;
     path.push(format!("{id}.json"));
     if !path.exists() { return Ok(None); }
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
@@ -37,10 +77,10 @@ fn load_project(app: AppHandle, id: String) -> Result<Option<Value>, String> {
 }
 
 #[tauri::command]
-fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
+fn save_project(app: AppHandle, project: Value, owner_id: String) -> Result<(), String> {
     let id = project.get("id").and_then(Value::as_str).ok_or("Project ID is missing.")?;
     if !valid_project_id(id) { return Err("Invalid project ID.".into()); }
-    let mut path = projects_directory(&app)?;
+    let mut path = projects_directory(&app, &owner_id)?;
     path.push(format!("{id}.json"));
     let mut temporary = path.clone();
     let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
@@ -75,18 +115,198 @@ fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn delete_project(app: AppHandle, id: String) -> Result<(), String> {
+fn delete_project(app: AppHandle, id: String, owner_id: String) -> Result<(), String> {
     if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
-    let mut path = projects_directory(&app)?;
+    let mut path = projects_directory(&app, &owner_id)?;
     path.push(format!("{id}.json"));
     if path.exists() { fs::remove_file(path).map_err(|e| e.to_string())?; }
+    let mut media = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    media.push("users");
+    media.push(&owner_id);
+    media.push("media");
+    media.push(&id);
+    if media.exists() { fs::remove_dir_all(media).map_err(|e| format!("Cannot remove local project media: {e}"))?; }
     Ok(())
 }
 
 #[tauri::command]
-fn write_project_file(path: String, content: String) -> Result<(), String> {
+fn save_project_media(
+    app: AppHandle,
+    owner_id: String,
+    project_id: String,
+    filename: String,
+    content: Vec<u8>,
+) -> Result<String, String> {
+    if filename.is_empty() || filename == "." || filename == ".." ||
+        !filename.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err("Invalid media filename.".into());
+    }
+    let directory = project_media_directory(&app, &owner_id, &project_id)?;
+    let path = directory.join(filename);
+    fs::write(&path, content).map_err(|e| format!("Cannot save imported project media locally: {e}"))?;
+    path.to_str().map(str::to_owned).ok_or_else(|| "Local media path is not valid UTF-8.".into())
+}
+
+#[tauri::command]
+fn project_media_exists(path: String) -> bool {
+    !path.trim().is_empty() && PathBuf::from(path).is_file()
+}
+
+#[tauri::command]
+fn read_project_media(path: String) -> Result<Vec<u8>, String> {
+    if path.trim().is_empty() { return Err("Media source path is required.".into()); }
+    let source = PathBuf::from(path);
+    if !source.is_file() { return Err("Media source file is missing. Relink it before exporting the project.".into()); }
+    fs::read(source).map_err(|e| format!("Cannot read source media for project export: {e}"))
+}
+
+#[tauri::command]
+fn write_project_file(path: String, content: Vec<u8>) -> Result<(), String> {
     if path.trim().is_empty() { return Err("Project export path is required.".into()); }
     fs::write(path, content).map_err(|e| format!("Cannot export project file: {e}"))
+}
+
+#[tauri::command]
+fn export_project_archive(project: Value, output_path: String) -> Result<(), String> {
+    if output_path.trim().is_empty() { return Err("Project export path is required.".into()); }
+    let mut portable_project = project.clone();
+    let clips = portable_project.get_mut("clips")
+        .and_then(Value::as_array_mut)
+        .ok_or("Project clips are missing.")?;
+    let mut media_entries = Vec::<(String, PathBuf)>::new();
+
+    for (index, clip) in clips.iter_mut().enumerate() {
+        let object = clip.as_object_mut().ok_or("Invalid project clip metadata.")?;
+        let kind = object.get("kind").and_then(Value::as_str).unwrap_or("");
+        if ["video", "image", "audio"].contains(&kind) {
+            let source = object.get("path").and_then(Value::as_str).unwrap_or("");
+            if source.trim().is_empty() || !PathBuf::from(source).is_file() {
+                let name = object.get("name").and_then(Value::as_str).unwrap_or("unnamed");
+                return Err(format!("Media \"{name}\" is unavailable. Relink the original file before exporting this project."));
+            }
+            let name = object.get("name").and_then(Value::as_str).unwrap_or("asset");
+            let safe_name: String = name.chars().map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' { ch } else { '-' }
+            }).collect();
+            let archive_name = format!("media/{index:04}-{}", if safe_name.is_empty() { "asset" } else { &safe_name });
+            media_entries.push((archive_name.clone(), PathBuf::from(source)));
+            object.insert("packageMedia".into(), Value::String(archive_name));
+            object.remove("path");
+        }
+        object.insert("src".into(), Value::String(String::new()));
+        object.remove("file");
+    }
+
+    let manifest = serde_json::json!({
+        "format": "ghous-cut-project",
+        "version": 2,
+        "exportedAt": format!("{:?}", std::time::SystemTime::now()),
+        "project": portable_project
+    });
+    let output = fs::File::create(&output_path)
+        .map_err(|e| format!("Cannot create project archive: {e}"))?;
+    let mut zip = ZipWriter::new(output);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated).compression_level(Some(1));
+    zip.start_file("manifest.json", options)
+        .map_err(|e| format!("Cannot write project manifest: {e}"))?;
+    let manifest_bytes = serde_json::to_vec(&manifest).map_err(|e| e.to_string())?;
+    zip.write_all(&manifest_bytes).map_err(|e| format!("Cannot write project manifest: {e}"))?;
+
+    // Stream each original media file directly into the archive. Memory use is
+    // bounded by the copy buffer instead of the size of the entire project.
+    for (archive_name, source_path) in media_entries {
+        let mut source = fs::File::open(&source_path)
+            .map_err(|e| format!("Cannot open media {}: {e}", source_path.display()))?;
+        zip.start_file(archive_name, options)
+            .map_err(|e| format!("Cannot add media to project archive: {e}"))?;
+        copy(&mut source, &mut zip)
+            .map_err(|e| format!("Cannot stream media into project archive: {e}"))?;
+    }
+    zip.finish().map_err(|e| format!("Cannot finalize project archive: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String) -> Result<Value, String> {
+    if archive_path.trim().is_empty() { return Err("Project archive path is required.".into()); }
+    let file = fs::File::open(&archive_path).map_err(|e| format!("Cannot open project archive: {e}"))?;
+    let mut archive = ZipArchive::new(file).ok();
+    // Older v1 .ghcut files were plain JSON manifests without embedded media.
+    let parsed: Value = if let Some(zip) = archive.as_mut() {
+        let mut manifest_text = String::new();
+        zip.by_name("manifest.json")
+            .map_err(|_| "Project manifest was not found in this archive.".to_string())?
+            .read_to_string(&mut manifest_text)
+            .map_err(|e| format!("Cannot read project manifest: {e}"))?;
+        serde_json::from_str(&manifest_text)
+            .map_err(|e| format!("Invalid project manifest: {e}"))?
+    } else {
+        let legacy_text = fs::read_to_string(&archive_path)
+            .map_err(|_| "File bukan arsip proyek Ghous Cut yang valid.".to_string())?;
+        serde_json::from_str(&legacy_text)
+            .map_err(|e| format!("Invalid legacy project manifest: {e}"))?
+    };
+    let version = parsed.get("version").and_then(Value::as_u64).unwrap_or(0);
+    if parsed.get("format").and_then(Value::as_str) != Some("ghous-cut-project") || !(1..=2).contains(&version) {
+        return Err("File bukan proyek Ghous Cut yang valid.".into());
+    }
+    let mut project = parsed.get("project").cloned().ok_or("Project data is missing.")?;
+    if project.get("name").and_then(Value::as_str).is_none() { return Err("Project name is missing.".into()); }
+    if !project.get("clips").and_then(Value::as_array).is_some() {
+        return Err("Project clips are missing.".into());
+    }
+
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let project_id = format!("import{now:x}");
+    let media_directory = project_media_directory(&app, &owner_id, &project_id)?;
+    // Treat extraction and project registration as one operation. If any ZIP
+    // entry is missing/corrupt or the project save fails, remove partial media.
+    let import_result: Result<Value, String> = (|| {
+    let clips = project.get_mut("clips").and_then(Value::as_array_mut).unwrap();
+    for (index, clip) in clips.iter_mut().enumerate() {
+        let object = clip.as_object_mut().ok_or("Invalid project clip metadata.")?;
+        let package_media = object.get("packageMedia").and_then(Value::as_str).map(str::to_owned);
+        if let Some(entry_name) = package_media {
+            if let Some(zip) = archive.as_mut() {
+                // Never use archive paths as filesystem paths. Media is written
+                // under generated filenames inside this user's project directory.
+                let original_name = object.get("name").and_then(Value::as_str).unwrap_or("media.bin");
+                let safe_name: String = original_name.chars().map(|ch| {
+                    if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' { ch } else { '-' }
+                }).collect();
+                let filename = format!("{index:04}-{}", if safe_name.is_empty() { "media.bin" } else { &safe_name });
+                let destination = media_directory.join(&filename);
+                let mut entry = zip.by_name(&entry_name)
+                    .map_err(|_| format!("Media entry {entry_name} is missing from the archive."))?;
+                let mut output = fs::File::create(&destination)
+                    .map_err(|e| format!("Cannot create local media file: {e}"))?;
+                copy(&mut entry, &mut output)
+                    .map_err(|e| format!("Cannot extract project media: {e}"))?;
+                let path = destination.to_str().ok_or("Local media path is not valid UTF-8.")?;
+                object.insert("path".into(), Value::String(path.to_owned()));
+                object.insert("mediaMissing".into(), Value::Bool(false));
+            } else {
+                object.insert("mediaMissing".into(), Value::Bool(true));
+            }
+            object.remove("packageMedia");
+        } else if ["video", "image", "audio"].contains(&object.get("kind").and_then(Value::as_str).unwrap_or("")) {
+            object.insert("mediaMissing".into(), Value::Bool(true));
+        }
+        object.insert("src".into(), Value::String(String::new()));
+        object.remove("file");
+    }
+    project["id"] = Value::String(project_id);
+    project["createdAt"] = Value::from(now as u64 / 1_000_000);
+    project["updatedAt"] = Value::from(now as u64 / 1_000_000);
+    save_project(app.clone(), project.clone(), owner_id.clone())?;
+    Ok(project)
+    })();
+
+    if import_result.is_err() {
+        let _ = fs::remove_dir_all(&media_directory);
+    }
+    import_result
 }
 
 #[tauri::command]
@@ -147,6 +367,7 @@ fn export_timeline(
     output: String,
     aspect_ratio: String,
     denoise: bool,
+    muted_tracks: Vec<i64>,
 ) -> Result<String, String> {
     if output.trim().is_empty() { return Err("Output path is required.".into()); }
     let (width, height) = match aspect_ratio.as_str() {
@@ -248,12 +469,13 @@ fn export_timeline(
         if has_audio {
             let label = format!("a{}", clip.index);
             let delay_ms = (clip.start * 1000.0).round() as u64;
+            let effective_volume = if muted_tracks.contains(&clip.track) { 0.0 } else { clip.volume };
             let mut filters = format!(
                 "[{input_index}:a]asetpts=PTS-STARTPTS,volume={:.3}",
-                clip.volume
+                effective_volume
             );
             if denoise { filters.push_str(",afftdn=nf=-25"); }
-            filters.push_str(&format!(",adelay=delays={delay_ms}:all=1,atrim=duration={:.3}[{label}]", clip.duration));
+            filters.push_str(&format!(",atrim=duration={:.3},adelay=delays={delay_ms}:all=1[{label}]", clip.duration));
             graph.push(filters);
             audio_labels.push(format!("[{label}]"));
         }
@@ -300,7 +522,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, write_project_file
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, project_media_exists, read_project_media, write_project_file, export_project_archive, import_project_archive, google_oauth::google_oauth_sign_in
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
