@@ -156,9 +156,15 @@ export async function loadProject<T>(id: string): Promise<StoredProject<T> | nul
   }
 }
 
-export async function saveProject<T>(id: string, name: string, clips: T[], aspectRatio?: StoredProject<T>["aspectRatio"]): Promise<void> {
+async function withProjectQueue(id: string, operation: () => Promise<void>): Promise<void> {
   const previous = projectSaveQueues.get(id) ?? Promise.resolve();
-  const next = previous.catch(() => undefined).then(async () => {
+  const next = previous.catch(() => undefined).then(operation);
+  projectSaveQueues.set(id, next);
+  try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
+}
+
+export async function saveProject<T>(id: string, name: string, clips: T[], aspectRatio?: StoredProject<T>["aspectRatio"]): Promise<void> {
+  await withProjectQueue(id, async () => {
     const current = isDesktop()
       ? await loadProject<T>(id)
       : (browserProjects.get(id) as StoredProject<T> | undefined) ?? await loadProject<T>(id);
@@ -171,33 +177,34 @@ export async function saveProject<T>(id: string, name: string, clips: T[], aspec
     if (isDesktop()) await invoke<void>("save_project", { project });
     else await persistBrowserProject(project);
   });
-  projectSaveQueues.set(id, next);
-  try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
 }
 
 export async function createProject<T>(project: StoredProject<T>): Promise<void> {
-  if (isDesktop()) await invoke("save_project", { project });
-  else await persistBrowserProject(project);
+  await withProjectQueue(project.id, async () => {
+    if (isDesktop()) await invoke("save_project", { project });
+    else await persistBrowserProject(project);
+  });
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  if (isDesktop()) {
-    await invoke("delete_project", { id });
-    return;
-  }
-  browserProjects.delete(id);
-  const root = await browserRoot();
-  if (!root) return;
-  try {
-    const projects = await root.getDirectoryHandle("projects");
-    await projects.removeEntry(`${id}.json`);
-  } catch { /* Project file may already be absent. */ }
-  try {
-    const media = await root.getDirectoryHandle("media");
-    await media.removeEntry(id, { recursive: true });
-  } catch { /* Media directory may already be absent. */ }
+  await withProjectQueue(id, async () => {
+    if (isDesktop()) {
+      await invoke("delete_project", { id });
+      return;
+    }
+    browserProjects.delete(id);
+    const root = await browserRoot();
+    if (!root) return;
+    try {
+      const projects = await root.getDirectoryHandle("projects");
+      await projects.removeEntry(`${id}.json`);
+    } catch { /* Project file may already be absent. */ }
+    try {
+      const media = await root.getDirectoryHandle("media");
+      await media.removeEntry(id, { recursive: true });
+    } catch { /* Media directory may already be absent. */ }
+  });
 }
-
 type PortableClip = { id?: string; name?: string; src?: string; file?: File; [key: string]: unknown };
 const safeProjectName = (name: string) =>
   name.replace(/[\\/:*?"<>|]/g, "-").trim() || "Ghous-Cut-Project";
