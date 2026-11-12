@@ -891,6 +891,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!authReady || !authUser) return;
     let alive = true;
     const timer = window.setTimeout(async () => {
       try {
@@ -903,7 +904,7 @@ export default function App() {
       if (alive) setScreen("library");
     }, 1250);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, []);
+  }, [authReady, authUser?.uid]);
 
   const startProject = async () => {
     const name = draftName.trim() || "Proyek Tanpa Judul";
