@@ -241,7 +241,7 @@ fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String
         return Err("File bukan proyek Ghous Cut yang valid.".into());
     }
     let mut project = parsed.get("project").cloned().ok_or("Project data is missing.")?;
-    let project_name = project.get("name").and_then(Value::as_str).ok_or("Project name is missing.")?;
+    if project.get("name").and_then(Value::as_str).is_none() { return Err("Project name is missing.".into()); }
     if !project.get("clips").and_then(Value::as_array).is_some() {
         return Err("Project clips are missing.".into());
     }
@@ -282,7 +282,6 @@ fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String
     project["id"] = Value::String(project_id);
     project["createdAt"] = Value::from(now as u64 / 1_000_000);
     project["updatedAt"] = Value::from(now as u64 / 1_000_000);
-    let _ = project_name;
     save_project(app, project.clone(), owner_id)?;
     Ok(project)
 }
