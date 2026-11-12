@@ -819,6 +819,14 @@ function BrandLogo({ size = 28 }: { size?: number }) {
   />;
 }
 
+const formatStorageBytes = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes, unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+};
+
 export default function App() {
   const [screen, setScreen] = useState<"splash" | "library" | "editor">("splash");
   const [authUser, setAuthUser] = useState<GhousUser | null>(null);
@@ -833,6 +841,7 @@ export default function App() {
   const [draftName, setDraftName] = useState("");
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
+  const [storageUsage, setStorageUsage] = useState<{ usage: number; quota: number } | null>(null);
   const projectFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => observeUser(user => { setAuthUser(user); setAuthReady(true); }, error => { setAuthError(error.message); setAuthReady(true); }), []);
@@ -842,6 +851,19 @@ export default function App() {
     setProjects([]);
     setActiveProject(null);
   }, [authUser?.uid]);
+
+  useEffect(() => {
+    if (!authUser || screen !== "library" || ("__TAURI_INTERNALS__" in window)) {
+      setStorageUsage(null);
+      return;
+    }
+    let active = true;
+    void navigator.storage?.estimate().then(estimate => {
+      if (!active || estimate.usage == null || estimate.quota == null) return;
+      setStorageUsage({ usage: estimate.usage, quota: estimate.quota });
+    }).catch(() => setStorageUsage(null));
+    return () => { active = false; };
+  }, [authUser?.uid, screen, projects.length]);
 
   // The project library uses normal document scrolling. The editor keeps its own
   // fixed-height landscape workspace, so scope viewport rules to the active screen.
@@ -1021,6 +1043,14 @@ export default function App() {
       <div className="library-welcome">
         <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut menyimpan susunan proyek; media sumber tetap di perangkatmu.</p></div>
         <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
+      </div>
+      <div className="local-storage-info">
+        <div className="local-storage-copy">
+          <span className="library-kicker">PENYIMPANAN LOKAL</span>
+          <strong>{("__TAURI_INTERNALS__" in window) ? "Media tetap di perangkatmu" : storageUsage ? `${formatStorageBytes(storageUsage.usage)} terpakai dari ${formatStorageBytes(storageUsage.quota)}` : "Kapasitas browser perangkatmu"}</strong>
+          <small>{("__TAURI_INTERNALS__" in window) ? "File sumber video, audio, dan gambar tetap di folder yang kamu pilih. Proyek disimpan di penyimpanan aplikasi lokal." : "Perkiraan pemakaian penyimpanan Ghous Cut di browser ini. Batas kapasitas mengikuti perangkat dan browser."}</small>
+        </div>
+        {storageUsage && !("__TAURI_INTERNALS__" in window) && <div className="local-storage-meter" role="img" aria-label={`${Math.min(100, Math.round(storageUsage.usage / Math.max(1, storageUsage.quota) * 100))}% kapasitas browser terpakai`}><span style={{ width: `${Math.min(100, storageUsage.usage / Math.max(1, storageUsage.quota) * 100)}%` }}/></div>}
       </div>
       <div className="library-toolbar">
         <label className="project-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari proyek..." /></label>
