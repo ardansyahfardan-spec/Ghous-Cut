@@ -540,7 +540,14 @@ async function importBrowserProjectArchive(file: File, ownerId: string): Promise
     if (streamError) throw streamError;
     if (!manifestSeen || !manifestChunks.length) throw new Error("Manifest proyek tidak ditemukan.");
 
-    const manifestText = await new Blob(manifestChunks).text();
+    const manifestLength = manifestChunks.reduce((total, chunk) => total + chunk.length, 0);
+    const manifestBytes = new Uint8Array(manifestLength);
+    let manifestOffset = 0;
+    for (const chunk of manifestChunks) {
+      manifestBytes.set(chunk, manifestOffset);
+      manifestOffset += chunk.length;
+    }
+    const manifestText = new TextDecoder().decode(manifestBytes);
     const parsed = JSON.parse(manifestText) as {
       format?: string; version?: number; project?: StoredProject;
     };
