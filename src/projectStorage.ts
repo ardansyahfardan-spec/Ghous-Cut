@@ -191,7 +191,7 @@ export async function createProject<T>(project: StoredProject<T>, ownerId: strin
   const accountId = safeOwnerId(ownerId);
   await withProjectQueue(projectKey(accountId, project.id), async () => {
     if (isDesktop()) await invoke("save_project", { project, ownerId: accountId });
-    else await persistBrowserProject(project);
+    else await persistBrowserProject(project, accountId);
   });
 }
 
