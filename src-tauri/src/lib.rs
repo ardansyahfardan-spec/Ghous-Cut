@@ -147,6 +147,7 @@ fn export_timeline(
     output: String,
     aspect_ratio: String,
     denoise: bool,
+    muted_tracks: Vec<i64>,
 ) -> Result<String, String> {
     if output.trim().is_empty() { return Err("Output path is required.".into()); }
     let (width, height) = match aspect_ratio.as_str() {
@@ -248,9 +249,10 @@ fn export_timeline(
         if has_audio {
             let label = format!("a{}", clip.index);
             let delay_ms = (clip.start * 1000.0).round() as u64;
+            let effective_volume = if muted_tracks.contains(&clip.track) { 0.0 } else { clip.volume };
             let mut filters = format!(
                 "[{input_index}:a]asetpts=PTS-STARTPTS,volume={:.3}",
-                clip.volume
+                effective_volume
             );
             if denoise { filters.push_str(",afftdn=nf=-25"); }
             filters.push_str(&format!(",adelay=delays={delay_ms}:all=1,atrim=duration={:.3}[{label}]", clip.duration));
