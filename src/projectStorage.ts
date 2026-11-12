@@ -60,7 +60,7 @@ async function persistBrowserProject<T>(project: StoredProject<T>): Promise<void
     .getDirectoryHandle(project.id, { create: true });
   const clips = await Promise.all(project.clips.map(async (rawClip, index) => {
     const clip = rawClip as T & { id?: string; name?: string; src?: string; file?: File; opfsMedia?: string };
-    if (clip.opfsMedia) return { ...clip, src: "", file: undefined };
+    if (clip.opfsMedia && !(clip.file instanceof File) && !clip.src?.startsWith("blob:")) return { ...clip, src: "", file: undefined };
     let file = clip.file instanceof File ? clip.file : undefined;
     if (!file && clip.src?.startsWith("blob:")) {
       const response = await fetch(clip.src);
@@ -157,23 +157,22 @@ export async function loadProject<T>(id: string): Promise<StoredProject<T> | nul
 }
 
 export async function saveProject<T>(id: string, name: string, clips: T[], aspectRatio?: StoredProject<T>["aspectRatio"]): Promise<void> {
-  const current = isDesktop()
-    ? await loadProject<T>(id)
-    : (browserProjects.get(id) as StoredProject<T> | undefined) ?? await loadProject<T>(id);
-  const project: StoredProject<T> = {
-    ...current, id, name, clips,
-    ...(aspectRatio ? { aspectRatio } : {}),
-    createdAt: current?.createdAt ?? Date.now(),
-    updatedAt: Date.now()
-  };
-  if (isDesktop()) {
-    const previous = projectSaveQueues.get(id) ?? Promise.resolve();
-    const next = previous.catch(() => undefined).then(() => invoke<void>("save_project", { project }));
-    projectSaveQueues.set(id, next);
-    try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
-  } else {
-    await persistBrowserProject(project);
-  }
+  const previous = projectSaveQueues.get(id) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(async () => {
+    const current = isDesktop()
+      ? await loadProject<T>(id)
+      : (browserProjects.get(id) as StoredProject<T> | undefined) ?? await loadProject<T>(id);
+    const project: StoredProject<T> = {
+      ...current, id, name, clips,
+      ...(aspectRatio ? { aspectRatio } : {}),
+      createdAt: current?.createdAt ?? Date.now(),
+      updatedAt: Date.now()
+    };
+    if (isDesktop()) await invoke<void>("save_project", { project });
+    else await persistBrowserProject(project);
+  });
+  projectSaveQueues.set(id, next);
+  try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
 }
 
 export async function createProject<T>(project: StoredProject<T>): Promise<void> {
