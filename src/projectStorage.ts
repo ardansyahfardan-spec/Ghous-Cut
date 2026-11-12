@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { strFromU8, strToU8, unzipSync, zipSync, Zip, ZipPassThrough } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync, Zip, ZipPassThrough, Unzip, UnzipInflate } from "fflate";
 
 export type StoredProject<T = any> = {
   id: string;
@@ -443,12 +443,183 @@ export async function importProjectArchivePath(archivePath: string, ownerId: str
   });
 }
 
-export async function importProjectFile(file: File, ownerId: string): Promise<StoredProject> {
-  let parsed: {
-    format?: string; version?: number; project?: StoredProject;
-  };
-  let archivedMedia: Record<string, Uint8Array> = {};
 
+async function importBrowserProjectArchive(file: File, ownerId: string): Promise<StoredProject> {
+  const root = await browserRoot(ownerId);
+  if (!root) throw new Error("Persistent local storage is unavailable in this browser.");
+  const projectId = crypto.randomUUID();
+  const mediaDirectory = await (await root.getDirectoryHandle("media", { create: true }))
+    .getDirectoryHandle(projectId, { create: true });
+  const mediaNames = new Map<string, string>();
+  const manifestChunks: Uint8Array[] = [];
+  let manifestSeen = false;
+  let pendingWrites = Promise.resolve();
+  const fileTasks: Promise<void>[] = [];
+  let streamError: unknown = null;
+  let mediaIndex = 0;
+
+  const unzipper = new Unzip();
+  unzipper.register(UnzipInflate);
+  unzipper.onfile = entry => {
+    if (entry.name === "manifest.json") {
+      manifestSeen = true;
+      let resolveEntry!: () => void;
+      let rejectEntry!: (error: unknown) => void;
+      const done = new Promise<void>((resolve, reject) => {
+        resolveEntry = resolve;
+        rejectEntry = reject;
+      });
+      fileTasks.push(done);
+      entry.ondata = (error, chunk, final) => {
+        if (error) {
+          streamError = error;
+          rejectEntry(error);
+          return;
+        }
+        if (chunk?.length) manifestChunks.push(chunk);
+        if (final) resolveEntry();
+      };
+      entry.start();
+      return;
+    }
+
+    if (entry.name.startsWith("media/") && !entry.name.endsWith("/")) {
+      const leaf = entry.name.split("/").pop() || "media.bin";
+      const storageName = `${String(mediaIndex++).padStart(4, "0")}-${safeProjectName(leaf)}`;
+      mediaNames.set(entry.name, storageName);
+      const writerReady = mediaDirectory.getFileHandle(storageName, { create: true })
+        .then(handle => handle.createWritable());
+      let resolveEntry!: () => void;
+      let rejectEntry!: (error: unknown) => void;
+      const done = new Promise<void>((resolve, reject) => {
+        resolveEntry = resolve;
+        rejectEntry = reject;
+      });
+      fileTasks.push(done);
+      entry.ondata = (error, chunk, final) => {
+        if (error) {
+          streamError = error;
+          rejectEntry(error);
+          return;
+        }
+        pendingWrites = pendingWrites.then(async () => {
+          const writer = await writerReady;
+          if (chunk?.length) await writer.write(chunk);
+          if (final) await writer.close();
+        }).then(() => {
+          if (final) resolveEntry();
+        }).catch(rejectEntry);
+      };
+      entry.start();
+      return;
+    }
+
+    // Ignore unexpected archive entries without retaining their contents.
+    entry.ondata = error => { if (error) streamError = error; };
+    entry.start();
+  };
+
+  try {
+    const reader = file.stream().getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value?.length) unzipper.push(value);
+        // Backpressure: do not feed more compressed data until OPFS writes
+        // triggered by the previous chunk have completed.
+        await pendingWrites;
+        if (streamError) throw streamError;
+      }
+      unzipper.push(new Uint8Array(0), true);
+    } finally {
+      reader.releaseLock();
+    }
+    await Promise.all(fileTasks);
+    await pendingWrites;
+    if (streamError) throw streamError;
+    if (!manifestSeen || !manifestChunks.length) throw new Error("Manifest proyek tidak ditemukan.");
+
+    const manifestText = await new Blob(manifestChunks).text();
+    const parsed = JSON.parse(manifestText) as {
+      format?: string; version?: number; project?: StoredProject;
+    };
+    if (parsed.format !== "ghous-cut-project" || ![1, 2].includes(parsed.version ?? 0) ||
+        !parsed.project || typeof parsed.project.name !== "string" || !Array.isArray(parsed.project.clips)) {
+      throw new Error("File bukan proyek Ghous Cut yang valid.");
+    }
+
+    const clips = parsed.project.clips.map(rawClip => {
+      const item = rawClip as PortableClip & { packageMedia?: string };
+      const storageName = item.packageMedia ? mediaNames.get(item.packageMedia) : undefined;
+      if (!storageName) {
+        return { ...item, src: "", file: undefined, mediaMissing: true, packageMedia: undefined };
+      }
+      return {
+        ...item,
+        src: "",
+        file: undefined,
+        opfsMedia: storageName,
+        mediaMissing: false,
+        packageMedia: undefined
+      };
+    });
+    const now = Date.now();
+    const project: StoredProject = {
+      ...parsed.project,
+      id: projectId,
+      name: parsed.project.name,
+      clips,
+      createdAt: now,
+      updatedAt: now
+    };
+    await createProject(project, ownerId);
+    return project;
+  } catch (error) {
+    try {
+      await (await root.getDirectoryHandle("media")).removeEntry(projectId, { recursive: true });
+    } catch { /* Remove partial extraction if possible. */ }
+    throw error;
+  }
+}
+
+export async function importProjectFile(file: File, ownerId: string): Promise<StoredProject> {
+  if (!isDesktop()) {
+    const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    const isZip = header[0] === 0x50 && header[1] === 0x4b &&
+      (header[2] === 0x03 || header[2] === 0x05 || header[2] === 0x07);
+    if (isZip) return await importBrowserProjectArchive(file, safeOwnerId(ownerId));
+
+    // Backward compatibility with v1 JSON-based .ghcut projects.
+    let parsed: { format?: string; version?: number; project?: StoredProject };
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      throw new Error("File bukan arsip proyek Ghous Cut yang valid.");
+    }
+    if (parsed.format !== "ghous-cut-project" || ![1, 2].includes(parsed.version ?? 0) ||
+        !parsed.project || typeof parsed.project.name !== "string" || !Array.isArray(parsed.project.clips)) {
+      throw new Error("File bukan proyek Ghous Cut yang valid.");
+    }
+    const now = Date.now();
+    const project: StoredProject = {
+      ...parsed.project,
+      id: crypto.randomUUID(),
+      clips: parsed.project.clips.map(rawClip => ({
+        ...(rawClip as PortableClip),
+        src: "",
+        file: undefined,
+        mediaMissing: true
+      })),
+      createdAt: now,
+      updatedAt: now
+    };
+    await createProject(project, ownerId);
+    return project;
+  }
+
+  let parsed: { format?: string; version?: number; project?: StoredProject };
+  let archivedMedia: Record<string, Uint8Array> = {};
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
     const archive = unzipSync(bytes);
@@ -456,52 +627,36 @@ export async function importProjectFile(file: File, ownerId: string): Promise<St
     if (!manifest) throw new Error("Manifest proyek tidak ditemukan.");
     parsed = JSON.parse(strFromU8(manifest));
     archivedMedia = archive;
-  } catch (archiveError) {
-    // Backward compatibility with v1 JSON-based .ghcut projects.
+  } catch {
     try {
       parsed = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
       throw new Error("File bukan arsip proyek Ghous Cut yang valid.");
     }
   }
-
   if (parsed.format !== "ghous-cut-project" || ![1, 2].includes(parsed.version ?? 0) ||
       !parsed.project || typeof parsed.project.name !== "string" || !Array.isArray(parsed.project.clips)) {
     throw new Error("File bukan proyek Ghous Cut yang valid.");
   }
-
   const now = Date.now();
   const projectId = crypto.randomUUID();
   const clips = [];
   for (let index = 0; index < parsed.project.clips.length; index += 1) {
     const item = parsed.project.clips[index] as PortableClip & { packageMedia?: string };
-    const mediaKey = item.packageMedia;
-    const mediaBytes = mediaKey ? archivedMedia[mediaKey] : undefined;
+    const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
     if (!mediaBytes) {
       clips.push({ ...item, src: "", file: undefined, mediaMissing: true, packageMedia: undefined });
       continue;
     }
     const mediaName = item.name || "media.bin";
-    if (isDesktop()) {
-      // Avoid allocating an extra browser File/ArrayBuffer on Windows. The
-      // native app writes each item before moving to the next one.
-      const path = await invoke<string>("save_project_media", {
-        ownerId: safeOwnerId(ownerId),
-        projectId,
-        filename: `${String(index).padStart(4, "0")}-${safeProjectName(mediaName)}`,
-        content: Array.from(mediaBytes)
-      });
-      clips.push({ ...item, path, src: "", file: undefined, packageMedia: undefined });
-    } else {
-      const extension = mediaName.split(".").pop()?.toLowerCase() || "bin";
-      const mediaBuffer = mediaBytes.buffer.slice(
-        mediaBytes.byteOffset,
-        mediaBytes.byteOffset + mediaBytes.byteLength
-      ) as ArrayBuffer;
-      const mediaFile = new File([mediaBuffer], mediaName, { type: mediaMimeType(mediaName) });
-      clips.push({ ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined });
-    }
-    if (mediaKey) delete archivedMedia[mediaKey];
+    const path = await invoke<string>("save_project_media", {
+      ownerId: safeOwnerId(ownerId),
+      projectId,
+      filename: `${String(index).padStart(4, "0")}-${safeProjectName(mediaName)}`,
+      content: Array.from(mediaBytes)
+    });
+    clips.push({ ...item, path, src: "", file: undefined, packageMedia: undefined });
+    if (item.packageMedia) delete archivedMedia[item.packageMedia];
   }
   const project: StoredProject = {
     ...parsed.project,
