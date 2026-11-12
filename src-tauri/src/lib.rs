@@ -145,6 +145,14 @@ fn save_project_media(
 }
 
 #[tauri::command]
+fn read_project_media(path: String) -> Result<Vec<u8>, String> {
+    if path.trim().is_empty() { return Err("Media source path is required.".into()); }
+    let source = PathBuf::from(path);
+    if !source.is_file() { return Err("Media source file is missing. Relink it before exporting the project.".into()); }
+    fs::read(source).map_err(|e| format!("Cannot read source media for project export: {e}"))
+}
+
+#[tauri::command]
 fn write_project_file(path: String, content: Vec<u8>) -> Result<(), String> {
     if path.trim().is_empty() { return Err("Project export path is required.".into()); }
     fs::write(path, content).map_err(|e| format!("Cannot export project file: {e}"))
@@ -363,7 +371,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, write_project_file
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, read_project_media, write_project_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
