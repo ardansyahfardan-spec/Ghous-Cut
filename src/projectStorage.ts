@@ -63,9 +63,13 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
   const projectsDirectory = await root.getDirectoryHandle("projects", { create: true });
   const mediaDirectory = await (await root.getDirectoryHandle("media", { create: true }))
     .getDirectoryHandle(project.id, { create: true });
+  const retainedMedia = new Set<string>();
   const clips = await Promise.all(project.clips.map(async (rawClip, index) => {
     const clip = rawClip as T & { id?: string; name?: string; src?: string; file?: File; opfsMedia?: string };
-    if (clip.opfsMedia && !(clip.file instanceof File) && !clip.src?.startsWith("blob:")) return { ...clip, src: "", file: undefined };
+    if (clip.opfsMedia && !(clip.file instanceof File) && !clip.src?.startsWith("blob:")) {
+      retainedMedia.add(clip.opfsMedia);
+      return { ...clip, src: "", file: undefined };
+    }
     let file = clip.file instanceof File ? clip.file : undefined;
     if (!file && clip.src?.startsWith("blob:")) {
       const response = await fetch(clip.src);
@@ -76,6 +80,7 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
     }
     if (!file) return { ...clip, src: "", file: undefined };
     const mediaName = `${clip.id || index}-${safeProjectName(clip.name || `asset-${index}`)}`;
+    retainedMedia.add(mediaName);
     const handle = await mediaDirectory.getFileHandle(mediaName, { create: true });
     let alreadySaved = false;
     try {
@@ -89,6 +94,11 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
     }
     return { ...clip, src: "", file: undefined, opfsMedia: mediaName };
   }));
+  for await (const entry of mediaDirectory.values()) {
+    if (entry.kind === "file" && !retainedMedia.has(entry.name)) {
+      await mediaDirectory.removeEntry(entry.name);
+    }
+  }
   const stored = { ...project, clips };
   await writeOpfsText(projectsDirectory, `${project.id}.json`, JSON.stringify(stored));
   browserProjects.set(projectKey(ownerId, project.id), project);
