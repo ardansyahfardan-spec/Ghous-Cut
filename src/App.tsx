@@ -34,7 +34,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
+function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<boolean> }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
@@ -461,7 +461,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
       if (mod && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom(v => Math.min(1.8, Math.round((v + 0.1) * 10) / 10)); return; }
       if (mod && event.key === "-") { event.preventDefault(); setZoom(v => Math.max(0.6, Math.round((v - 0.1) * 10) / 10)); return; }
       if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
-      if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project save requested."); return; }
+      if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }).then(saved => setNotice(saved ? "Project file saved." : "Project file save cancelled.")); return; }
       if (mod && event.key.toLowerCase() === "e") { event.preventDefault(); void exportVideo(); return; }
       if (mod) return;
       switch (event.key) {
@@ -513,7 +513,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     <header className="topbar">
       <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><BrandLogo size={22}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
-      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost mobile-properties-action" onClick={() => setShowMobileInspector(value => !value)} title="Clip properties" aria-label="Clip properties"><Settings2 size={16}/></button><button className="btn ghost save-action" onClick={() => { void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project file saved."); }} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
+      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost mobile-properties-action" onClick={() => setShowMobileInspector(value => !value)} title="Clip properties" aria-label="Clip properties"><Settings2 size={16}/></button><button className="btn ghost save-action" onClick={() => { void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }).then(saved => setNotice(saved ? "Project file saved." : "Project file save cancelled.")); }} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
     </header>
 
     <main className="workspace">
@@ -825,12 +825,14 @@ export default function App() {
     };
   }, [screen]);
 
-  const exportProject = async (project: StoredProject<Clip>) => {
+  const exportProject = async (project: StoredProject<Clip>): Promise<boolean> => {
     try {
       const saved = await exportProjectFile(project);
       if (saved) setStorageError("");
+      return saved;
     } catch (error) {
       setStorageError(`Gagal menyimpan file proyek: ${String(error)}`);
+      return false;
     }
   };
 
