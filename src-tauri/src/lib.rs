@@ -35,8 +35,8 @@ fn recover_project_backups(directory: &PathBuf) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
-    let directory = projects_directory(&app)?;
+fn list_projects(app: AppHandle, owner_id: String) -> Result<Vec<Value>, String> {
+    let directory = projects_directory(&app, &owner_id)?;
     recover_project_backups(&directory)?;
     let mut projects = Vec::new();
     for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
@@ -51,7 +51,7 @@ fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
 #[tauri::command]
 fn load_project(app: AppHandle, id: String, owner_id: String) -> Result<Option<Value>, String> {
     if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
-    let directory = projects_directory(&app)?;
+    let directory = projects_directory(&app, &owner_id)?;
     recover_project_backups(&directory)?;
     let mut path = directory;
     path.push(format!("{id}.json"));
