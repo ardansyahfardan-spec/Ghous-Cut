@@ -391,7 +391,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     const group=selectedIds.includes(id)?clips.filter(c=>selectedIds.includes(c.id)):[moving];
     const snappedStart=snapTime(id,start),trackDelta=track-moving.track;
     const groupIds=new Set(group.map(c=>c.id));
-    updateTimeline(old=>old.map(c=>groupIds.has(c.id)?{...c,start:Math.max(0,snappedStart+(c.start-moving.start)),track:Math.max(0,Math.min(2,c.track+trackDelta))}:c));
+    updateTimeline(old=>old.map(c=>groupIds.has(c.id)?{...c,start:Math.max(0,snappedStart+(c.start-moving.start)),track:c.kind==="audio"?2:Math.max(0,Math.min(1,c.track+trackDelta))}:c));
     setDragging(null);
   };
 
@@ -633,7 +633,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               const groupIds=new Set(drag.group.map(item=>item.id));
               setClips(old=>old.map(item=>groupIds.has(item.id)?{
                 ...item,start:Math.max(0,nextStart+(item.start-drag.originalStart)),
-                track:Math.max(0,Math.min(2,item.track+trackDelta))
+                track:item.kind==="audio"?2:Math.max(0,Math.min(1,item.track+trackDelta))
               }:item));
             } else if(drag.mode==="trim-start"){
               const originalEnd=drag.originalStart+drag.originalDuration;
