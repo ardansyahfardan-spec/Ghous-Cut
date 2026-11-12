@@ -14,7 +14,7 @@ type MediaKind = "video" | "image" | "audio";
 type ProjectAspectRatio = "16:9" | "9:16" | "1:1";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
-  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; file?: File;
+  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; durationEstimated?: boolean; file?: File;
 };
 const SCALE = 54;
 const TRACKS = [
@@ -34,7 +34,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
+function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<boolean> }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
@@ -53,7 +53,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
-  const touchDrag = useRef<{ id: string; pointerId: number; startX: number; startY: number; originalStart: number; originalDuration: number; originalSourceIn: number; track: number; moved: boolean; mode: "move" | "trim-start" | "trim-end"; group: Clip[] } | null>(null);
+  const touchDrag = useRef<{ id: string; pointerId: number; startX: number; startY: number; originalStart: number; originalDuration: number; originalSourceIn: number; track: number; moved: boolean; mode: "move" | "trim-start" | "trim-end"; group: Clip[]; snapshot: Clip[] } | null>(null);
   const suppressClipClick = useRef(false);
   const scrubbing = useRef(false);
   const [projectReady, setProjectReady] = useState(false);
@@ -72,7 +72,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
         src: c.file ? URL.createObjectURL(c.file) : (isDesktop ? convertFileSrc(c.path) : c.src)
       }));
       setClips(restored);
-      setNotice(isDesktop ? "Project restored from local files on this PC." : "Project timeline restored. Re-import its source media in this browser session.");
+      const missingMedia = restored.filter(c => (c as Clip & { mediaMissing?: boolean }).mediaMissing).length;
+      setNotice(isDesktop
+        ? "Project restored from local files on this PC."
+        : missingMedia
+          ? `${missingMedia} source media file(s) are missing from this device. Relink the original files to continue editing.`
+          : "Project and source media restored from this device’s local browser storage.");
     }).catch(() => {
       if (alive) setNotice("Local project storage is unavailable in this browser.");
     }).finally(() => { if (alive) setProjectReady(true); });
@@ -115,7 +120,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   const currentPreview = activeVisualClips[activeVisualClips.length - 1] || activeAudioClips[0] || null;
   const activeMediaKey = [...activeVisualClips, ...activeAudioClips]
     .filter(c => c.kind === "video" || c.kind === "audio").map(c => [c.id, c.src, c.start, c.sourceIn, c.duration, c.volume ?? 1].join(":")).join("|") + "|muted:" + mutedTracks.join(",");
-  const duration = Math.max(30, ...clips.map(c => c.start + c.duration + 2));
+  const contentEnd = Math.max(0, ...clips.map(c => c.start + c.duration));
+  const duration = Math.max(30, contentEnd + 2);
   const scale = SCALE * zoom;
   const selectedSrc = currentPreview?.src || "";
 
@@ -147,9 +153,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   // media is gently re-synchronized instead of repeatedly seeking the master.
   useEffect(() => {
     if (!playing || clockClip) return;
-    const timer = window.setInterval(() => setPlayhead(v => Math.min(duration, v + 0.05)), 50);
+    const timer = window.setInterval(() => setPlayhead(v => {
+      const next = Math.min(contentEnd, v + 0.05);
+      if (next >= contentEnd) setPlaying(false);
+      return next;
+    }), 50);
     return () => window.clearInterval(timer);
-  }, [playing, clockClip?.id, duration]);
+  }, [playing, clockClip?.id, contentEnd]);
 
   useEffect(() => {
     const activeMedia = [...activeVisualClips, ...activeAudioClips]
@@ -193,24 +203,31 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     for (const clip of clips) {
       cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
     }
-    const newClips: Clip[] = paths.map(path => {
+    const prepared = await Promise.all(paths.map(async path => {
       const kind = kindFrom(path);
-      const track = kind === "audio" ? 2 : kind === "image" ? 1 : 0;
+      const src = convertFileSrc(path);
+      const duration = await readBrowserMediaDuration(src, kind);
+      return { path, kind, src, duration };
+    }));
+    const failed = prepared.filter(item => item.duration === null).map(item => basename(item.path));
+    const newClips: Clip[] = [];
+    for (const item of prepared) {
+      if (item.duration === null) continue;
+      const track = item.kind === "audio" ? 2 : item.kind === "image" ? 1 : 0;
       const start = cursors.get(track) ?? 0;
-      const duration = kind === "image" ? 5 : 10;
-      cursors.set(track, start + duration);
-      return {
-        id: crypto.randomUUID(), name: basename(path), path,
-        src: isDesktop ? convertFileSrc(path) : path,
-        kind, track, start, sourceIn: 0, duration, volume: 1
-      };
-    });
+      cursors.set(track, start + item.duration);
+      newClips.push({
+        id: crypto.randomUUID(), name: basename(item.path), path: item.path,
+        src: item.src, kind: item.kind, track, start, sourceIn: 0,
+        duration: item.duration, volume: 1, durationEstimated: false
+      });
+    }
     updateTimeline(old => [...old, ...newClips]);
     if (newClips[0]) { setSelected(newClips[0].id); setSelectedIds([newClips[0].id]); setPlayhead(newClips[0].start); }
-    setNotice(`Imported ${newClips.length} media file(s).`);
+    setNotice(`Imported ${newClips.length} media file(s).${failed.length ? ` · ${failed.length} file(s) could not be read: ${failed.join(", ")}` : ""}`);
   };
 
-  const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number> => {
+  const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number | null> => {
     if (kind === "image") return Promise.resolve(5);
     return new Promise(resolve => {
       const media = document.createElement(kind === "audio" ? "audio" : "video");
@@ -218,10 +235,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
       const finish = (duration: number) => {
         media.removeAttribute("src");
         media.load();
-        resolve(Number.isFinite(duration) && duration > 0 ? duration : 10);
+        resolve(Number.isFinite(duration) && duration > 0 ? duration : null);
       };
       media.onloadedmetadata = () => finish(media.duration);
-      media.onerror = () => finish(10);
+      media.onerror = () => finish(Number.NaN);
       media.src = src;
     });
   };
@@ -235,11 +252,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     }));
     const relinked = new Map<string, Clip>();
     const additions: Clip[] = [];
+    const failed: string[] = [];
     const cursors = new Map<number, number>();
     for (const clip of clips) {
       cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
     }
     for (const { file, kind, src, duration } of prepared) {
+      if (duration === null) { URL.revokeObjectURL(src); failed.push(file.name); continue; }
       const missing = clips.find(c => !c.src && !relinked.has(c.id) && c.name.toLowerCase() === file.name.toLowerCase());
       if (missing) {
         relinked.set(missing.id, { ...missing, path: file.name, src, file });
@@ -257,7 +276,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     const first = [...relinked.values(), ...additions][0];
     if (first) { setSelected(first.id); setSelectedIds([first.id]); setPlayhead(first.start); }
     const relinkCount = relinked.size;
-    setNotice(`${relinkCount} media relinked · ${additions.length} new media added.`);
+    setNotice(`${relinkCount} media relinked · ${additions.length} new media added.${failed.length ? ` · ${failed.length} file(s) could not be read: ${failed.join(", ")}` : ""}`);
   };
 
   const importMedia = async () => {
@@ -272,7 +291,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   };
 
   const updateClip = (id: string, patch: Partial<Clip>) =>
-    updateTimeline(old => old.map(c => c.id === id ? { ...c, ...patch } : c));
+    updateTimeline(old => old.map(c => c.id === id ? { ...c, ...patch, ...("duration" in patch || "sourceIn" in patch ? { durationEstimated: false } : {}) } : c));
+
+  const updateClipMetadata = (id: string, patch: Partial<Clip>) =>
+    setClips(old => old.map(c => c.id === id ? { ...c, ...patch } : c));
 
   const splitSelected = () => {
     if (!active) return setNotice("Select a clip first.");
@@ -280,9 +302,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     if (cutAt <= 0.08 || cutAt >= active.duration - 0.08) return setNotice("Move the playhead inside the selected clip before splitting.");
     const right: Clip = {
       ...active, id: crypto.randomUUID(), name: active.name + " (split)",
-      start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt
+      start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt, durationEstimated: false
     };
-    updateTimeline(old => old.flatMap(c => c.id === active.id ? [{ ...c, duration: cutAt }, right] : [c]));
+    updateTimeline(old => old.flatMap(c => c.id === active.id ? [{ ...c, duration: cutAt, durationEstimated: false }, right] : [c]));
     setSelected(right.id);setSelectedIds([right.id]);
     setNotice("Clip split at playhead.");
   };
@@ -298,13 +320,14 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
         name: c.name + " (split)",
         start: playhead,
         sourceIn: c.sourceIn + leftDuration,
-        duration: c.duration - leftDuration
+        duration: c.duration - leftDuration,
+        durationEstimated: false
       };
     });
     const rightById = new Map<string, Clip>(targets.map((c, i) => [c.id, rightClips[i]] as const));
     updateTimeline(old => old.flatMap(c => {
       const right = rightById.get(c.id);
-      return right ? [{ ...c, duration: playhead - c.start }, right] : [c];
+      return right ? [{ ...c, duration: playhead - c.start, durationEstimated: false }, right] : [c];
     }));
     setSelected(rightClips[0].id);setSelectedIds(rightClips.map(c=>c.id));
     setNotice(`Split all tracks: ${rightClips.length} clip(s) cut at playhead.`);
@@ -385,7 +408,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     const group=selectedIds.includes(id)?clips.filter(c=>selectedIds.includes(c.id)):[moving];
     const snappedStart=snapTime(id,start),trackDelta=track-moving.track;
     const groupIds=new Set(group.map(c=>c.id));
-    updateTimeline(old=>old.map(c=>groupIds.has(c.id)?{...c,start:Math.max(0,snappedStart+(c.start-moving.start)),track:Math.max(0,Math.min(2,c.track+trackDelta))}:c));
+    updateTimeline(old=>old.map(c=>groupIds.has(c.id)?{...c,start:Math.max(0,snappedStart+(c.start-moving.start)),track:c.kind==="audio"?2:Math.max(0,Math.min(1,c.track+trackDelta))}:c));
     setDragging(null);
   };
 
@@ -404,7 +427,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
         clips: exportClips,
         output,
         aspectRatio,
-        denoise
+        denoise,
+        mutedTracks
       });
       setNotice(result);
     } catch (e) {
@@ -454,7 +478,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
       if (mod && (event.key === "=" || event.key === "+")) { event.preventDefault(); setZoom(v => Math.min(1.8, Math.round((v + 0.1) * 10) / 10)); return; }
       if (mod && event.key === "-") { event.preventDefault(); setZoom(v => Math.max(0.6, Math.round((v - 0.1) * 10) / 10)); return; }
       if (mod && event.key.toLowerCase() === "i") { event.preventDefault(); void importMedia(); return; }
-      if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project save requested."); return; }
+      if (mod && event.key.toLowerCase() === "s") { event.preventDefault(); void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }).then(saved => setNotice(saved ? "Project file saved." : "Project file save cancelled.")); return; }
       if (mod && event.key.toLowerCase() === "e") { event.preventDefault(); void exportVideo(); return; }
       if (mod) return;
       switch (event.key) {
@@ -506,7 +530,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     <header className="topbar">
       <div className="brand"><button className="back-home" onClick={onBack} title="Kembali ke daftar proyek"><ArrowLeft size={16}/></button><div className="brand-mark"><BrandLogo size={22}/></div><span>ghous<span className="brand-accent">cut</span></span><span className="version">BETA 0.1</span></div>
       <div className="project-name"><span className="live-dot"/> {projectName} <ChevronDown size={14}/></div>
-      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost mobile-properties-action" onClick={() => setShowMobileInspector(value => !value)} title="Clip properties" aria-label="Clip properties"><Settings2 size={16}/></button><button className="btn ghost save-action" onClick={() => { void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }); setNotice("Project file saved."); }} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
+      <div className="top-actions"><button className="btn ghost shortcut-help-btn" onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts" aria-label="Keyboard shortcuts"><CircleHelp size={16}/><span>Shortcuts</span></button><button className="btn ghost import-action" onClick={importMedia} title="Import media" aria-label="Import media"><FolderOpen size={15}/><span>Import</span></button><button className="btn ghost mobile-properties-action" onClick={() => setShowMobileInspector(value => !value)} title="Clip properties" aria-label="Clip properties"><Settings2 size={16}/></button><button className="btn ghost save-action" onClick={() => { void onExportProject({ id: projectId, name: projectName, clips, aspectRatio, createdAt: Date.now(), updatedAt: Date.now() }).then(saved => setNotice(saved ? "Project file saved." : "Project file save cancelled.")); }} title="Save project file" aria-label="Save project"><Save size={15}/><span>Save</span></button><button className="btn primary export-action" onClick={exportVideo} disabled={exporting} title="Export video"><Download size={15}/><span>{exporting ? "Rendering…" : "Export"}</span></button></div>
     </header>
 
     <main className="workspace">
@@ -533,7 +557,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               const isActive = activeVisualClips.some(activeClip => activeClip.id === clip.id);
               if (clip.kind === "image") return (
                 <img key={clip.id} src={clip.src} className="preview-media preview-layer image-preview"
-                  style={{ zIndex: clip.track + 1, visibility: isActive ? "visible" : "hidden" }} alt={clip.name}/>
+                  style={{ zIndex: clip.track + 1, opacity: clip.opacity ?? 1, visibility: isActive ? "visible" : "hidden" }} alt={clip.name}/>
               );
               return (
                 <video key={clip.id} ref={element => {
@@ -544,7 +568,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                   muted={false} playsInline preload={isActive ? "auto" : "metadata"}
                   onLoadedMetadata={e => {
                     const d = e.currentTarget.duration;
-                    if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                    if (clip.durationEstimated && Number.isFinite(d) && d > 0) updateClipMetadata(clip.id, { ...(clip.sourceIn === 0 ? { duration: d } : {}), durationEstimated: false });
                   }}
                   onTimeUpdate={e => {
                     if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
@@ -553,7 +577,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                     if (clockClip?.id === clip.id) {
                       const end = clip.start + clip.duration;
                       setPlayhead(end);
-                      if (end >= duration - 0.05) setPlaying(false);
+                      if (end >= contentEnd - 0.05) setPlaying(false);
                     }
                   }} />
               );
@@ -565,7 +589,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               }} src={clip.src} preload={activeAudioClips.some(activeClip => activeClip.id === clip.id) ? "auto" : "metadata"}
                 onLoadedMetadata={e => {
                   const d = e.currentTarget.duration;
-                  if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                  if (clip.durationEstimated && Number.isFinite(d) && d > 0) updateClipMetadata(clip.id, { ...(clip.sourceIn === 0 ? { duration: d } : {}), durationEstimated: false });
                 }}
                 onTimeUpdate={e => {
                   if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
@@ -574,7 +598,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                   if (clockClip?.id === clip.id) {
                     const end = clip.start + clip.duration;
                     setPlayhead(end);
-                    if (end >= duration - 0.05) setPlaying(false);
+                    if (end >= contentEnd - 0.05) setPlaying(false);
                   }
                 }} />
             ))}
@@ -626,7 +650,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               const groupIds=new Set(drag.group.map(item=>item.id));
               setClips(old=>old.map(item=>groupIds.has(item.id)?{
                 ...item,start:Math.max(0,nextStart+(item.start-drag.originalStart)),
-                track:Math.max(0,Math.min(2,item.track+trackDelta))
+                track:item.kind==="audio"?2:Math.max(0,Math.min(1,item.track+trackDelta))
               }:item));
             } else if(drag.mode==="trim-start"){
               const originalEnd=drag.originalStart+drag.originalDuration;
@@ -637,19 +661,22 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               const safeStart=Math.min(originalEnd-0.1,Math.max(0,nextStart));
               setClips(old=>old.map(item=>item.id===drag.id?{
                 ...item,start:safeStart,duration:originalEnd-safeStart,
-                sourceIn:Math.max(0,drag.originalSourceIn+(safeStart-drag.originalStart))
+                sourceIn:Math.max(0,drag.originalSourceIn+(safeStart-drag.originalStart)),durationEstimated:false
               }:item));
             } else {
               const candidate=Math.max(drag.originalStart+0.1,drag.originalStart+drag.originalDuration+dx/scale);
               const snapPoints=[playhead,...clips.filter(item=>item.id!==drag.id).flatMap(item=>[item.start,item.start+item.duration])];
               let nextEnd=candidate,snapDistance=0.18;
               snapPoints.forEach(point=>{const delta=Math.abs(point-candidate);if(delta<snapDistance){snapDistance=delta;nextEnd=point;}});
-              setClips(old=>old.map(item=>item.id===drag.id?{...item,duration:Math.max(0.1,nextEnd-drag.originalStart)}:item));
+              setClips(old=>old.map(item=>item.id===drag.id?{...item,duration:Math.max(0.1,nextEnd-drag.originalStart),durationEstimated:false}:item));
             }
           }} onPointerUp={e=>{
             const drag=touchDrag.current;
             if(!drag || drag.pointerId!==e.pointerId) return;
             if(drag.moved){
+              undoStack.current.push(drag.snapshot);
+              if(undoStack.current.length>100) undoStack.current.shift();
+              redoStack.current=[];
               setNotice(drag.mode==="move" ? drag.group.length+" klip dipindahkan bersama." : drag.mode==="trim-start" ? "Awal klip disesuaikan." : "Akhir klip disesuaikan.");
               setSelectedIds(drag.mode==="move"?drag.group.map(item=>item.id):[drag.id]);
               setSelected(drag.id);
@@ -660,10 +687,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
             const drag=touchDrag.current;
             if(!drag || drag.pointerId!==e.pointerId) return;
             if(drag.moved){
-              setNotice(drag.mode==="move" ? drag.group.length+" klip dipindahkan bersama." : drag.mode==="trim-start" ? "Awal klip disesuaikan." : "Akhir klip disesuaikan.");
-              setSelectedIds(drag.mode==="move"?drag.group.map(item=>item.id):[drag.id]);
-              setSelected(drag.id);
-              suppressClipClick.current=true;
+              setClips(drag.snapshot);
+              setNotice("Perubahan drag dibatalkan.");
             }
             touchDrag.current=null;
           }}>
@@ -710,7 +735,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                     if(mode!=="move" || !selectedIds.includes(c.id) || e.shiftKey || e.ctrlKey || e.metaKey) selectClip(c,e);
                     setPlayhead(c.start);
                     touchDrag.current={id:c.id,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,originalStart:c.start,
-                      originalDuration:c.duration,originalSourceIn:c.sourceIn,track:c.track,moved:false,mode,group};
+                      originalDuration:c.duration,originalSourceIn:c.sourceIn,track:c.track,moved:false,mode,group,snapshot:clips.map(item=>({...item}))};
                   }}
                   className={`timeline-clip ${c.kind} ${selectedIds.includes(c.id)?"selected":""}` }
                   style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}>
@@ -817,12 +842,14 @@ export default function App() {
     };
   }, [screen]);
 
-  const exportProject = async (project: StoredProject<Clip>) => {
+  const exportProject = async (project: StoredProject<Clip>): Promise<boolean> => {
     try {
       const saved = await exportProjectFile(project);
       if (saved) setStorageError("");
+      return saved;
     } catch (error) {
       setStorageError(`Gagal menyimpan file proyek: ${String(error)}`);
+      return false;
     }
   };
 
