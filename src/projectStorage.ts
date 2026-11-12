@@ -260,6 +260,10 @@ export async function exportProjectFile<T>(project: StoredProject<T>): Promise<b
     const item = clip as T & PortableClip;
     const mediaPath = `media/${String(index).padStart(4, "0")}-${safeProjectName(item.name || `asset-${index}`)}`;
     const bytes = await browserMediaBytes(item);
+    const kind = (item as PortableClip & { kind?: string }).kind;
+    if (kind && ["video", "image", "audio"].includes(kind) && (!bytes || bytes.byteLength === 0)) {
+      throw new Error(`Media "${item.name || "unnamed"}" is unavailable. Relink the original file before exporting this project.`);
+    }
     if (bytes) media[mediaPath] = bytes;
     const { file: _file, src: _src, ...metadata } = item;
     return { ...metadata, src: "", ...(bytes ? { packageMedia: mediaPath } : {}) };
