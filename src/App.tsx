@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
+import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectArchivePath, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import { googleAuthConfigured, observeUser, signInWithGoogle, signOutGhous, type GhousUser } from "./auth";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
@@ -914,10 +914,21 @@ export default function App() {
     }
   };
 
-  const importProject = async (file: File) => {
+  const importProject = async (file?: File) => {
     try {
       if (!authUser) throw new Error("Silakan login dengan Google terlebih dahulu.");
-      const project = await importProjectFile(file, authUser.uid) as ProjectCard;
+      let project: ProjectCard;
+      if ("__TAURI_INTERNALS__" in window) {
+        const selected = await open({
+          multiple: false,
+          filters: [{ name: "Ghous Cut Project", extensions: ["ghcut"] }]
+        });
+        if (!selected || Array.isArray(selected)) return;
+        project = await importProjectArchivePath(selected, authUser.uid) as ProjectCard;
+      } else {
+        if (!file) return;
+        project = await importProjectFile(file, authUser.uid) as ProjectCard;
+      }
       await refreshProjects();
       setActiveProject(project);
       setScreen("editor");
@@ -1068,7 +1079,7 @@ export default function App() {
     <section className="library-content">
       <div className="library-welcome">
         <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut membawa susunan proyek beserta media sumber agar bisa dipindahkan ke perangkat lain.</p></div>
-        <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
+        <div className="library-welcome-actions"><button className="btn ghost" onClick={() => { if ("__TAURI_INTERNALS__" in window) void importProject(); else projectFileInputRef.current?.click(); }}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
       </div>
       <div className="local-storage-info">
         <div className="local-storage-copy">
