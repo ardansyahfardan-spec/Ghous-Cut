@@ -107,9 +107,9 @@ async function restoreBrowserProject<T>(project: StoredProject<T>, previewOnly =
       const handle = await mediaDirectory.getFileHandle(clip.opfsMedia);
       const file = await handle.getFile();
       if (previewOnly) previewRestored = true;
-      return { ...clip, file, src: URL.createObjectURL(file) };
+      return { ...clip, file, src: URL.createObjectURL(file), mediaMissing: false };
     } catch {
-      return clip;
+      return { ...clip, mediaMissing: true };
     }
   }));
   return { ...project, clips };
