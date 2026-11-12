@@ -315,7 +315,7 @@ export async function importProjectFile(file: File, ownerId: string): Promise<St
 
   const now = Date.now();
   const projectId = crypto.randomUUID();
-  const clips = await Promise.all(parsed.project.clips.map(async clip => {
+  const clips = await Promise.all(parsed.project.clips.map(async (clip, index) => {
     const item = clip as PortableClip & { packageMedia?: string };
     const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
     if (!mediaBytes) return { ...item, src: "", file: undefined };
@@ -328,7 +328,7 @@ export async function importProjectFile(file: File, ownerId: string): Promise<St
       const path = await invoke<string>("save_project_media", {
         ownerId: safeOwnerId(ownerId),
         projectId,
-        filename: safeProjectName(mediaName),
+        filename: `${String(index).padStart(4, "0")}-${safeProjectName(mediaName)}`,
         content: Array.from(mediaBytes)
       });
       return { ...item, path, src: "", file: undefined, packageMedia: undefined };
