@@ -115,7 +115,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   const currentPreview = activeVisualClips[activeVisualClips.length - 1] || activeAudioClips[0] || null;
   const activeMediaKey = [...activeVisualClips, ...activeAudioClips]
     .filter(c => c.kind === "video" || c.kind === "audio").map(c => [c.id, c.src, c.start, c.sourceIn, c.duration, c.volume ?? 1].join(":")).join("|") + "|muted:" + mutedTracks.join(",");
-  const duration = Math.max(30, ...clips.map(c => c.start + c.duration + 2));
+  const contentEnd = Math.max(0, ...clips.map(c => c.start + c.duration));
+  const duration = Math.max(30, contentEnd + 2);
   const scale = SCALE * zoom;
   const selectedSrc = currentPreview?.src || "";
 
@@ -147,9 +148,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   // media is gently re-synchronized instead of repeatedly seeking the master.
   useEffect(() => {
     if (!playing || clockClip) return;
-    const timer = window.setInterval(() => setPlayhead(v => Math.min(duration, v + 0.05)), 50);
+    const timer = window.setInterval(() => setPlayhead(v => {
+      const next = Math.min(contentEnd, v + 0.05);
+      if (next >= contentEnd) setPlaying(false);
+      return next;
+    }), 50);
     return () => window.clearInterval(timer);
-  }, [playing, clockClip?.id, duration]);
+  }, [playing, clockClip?.id, contentEnd]);
 
   useEffect(() => {
     const activeMedia = [...activeVisualClips, ...activeAudioClips]
@@ -560,7 +565,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                     if (clockClip?.id === clip.id) {
                       const end = clip.start + clip.duration;
                       setPlayhead(end);
-                      if (end >= duration - 0.05) setPlaying(false);
+                      if (end >= contentEnd - 0.05) setPlaying(false);
                     }
                   }} />
               );
@@ -581,7 +586,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                   if (clockClip?.id === clip.id) {
                     const end = clip.start + clip.duration;
                     setPlayhead(end);
-                    if (end >= duration - 0.05) setPlaying(false);
+                    if (end >= contentEnd - 0.05) setPlaying(false);
                   }
                 }} />
             ))}
