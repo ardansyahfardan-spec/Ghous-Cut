@@ -18,7 +18,7 @@ const config = {
 };
 
 export const googleAuthConfigured = Object.values(config).every(value => typeof value === "string" && value.length > 0);
-const googleDesktopClientId = import.meta.env.VITE_GOOGLE_DESKTOP_CLIENT_ID as string | undefined;
+const googleDesktopClientId = (import.meta.env.VITE_GOOGLE_DESKTOP_CLIENT_ID as string | undefined) || "474433462871-qcrd2rm7oak7l0qs0gtjepet6ga0m2n2.apps.googleusercontent.com";
 
 const app = googleAuthConfigured
   ? (getApps()[0] ?? initializeApp(config))
