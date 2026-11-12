@@ -64,11 +64,14 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
   const mediaDirectory = await (await root.getDirectoryHandle("media", { create: true }))
     .getDirectoryHandle(project.id, { create: true });
   const retainedMedia = new Set<string>();
-  const clips = await Promise.all(project.clips.map(async (rawClip, index) => {
+  const clips = [];
+  for (let index = 0; index < project.clips.length; index += 1) {
+    const rawClip = project.clips[index];
     const clip = rawClip as T & { id?: string; name?: string; src?: string; file?: File; opfsMedia?: string };
     if (clip.opfsMedia && !(clip.file instanceof File) && !clip.src?.startsWith("blob:")) {
       retainedMedia.add(clip.opfsMedia);
-      return { ...clip, src: "", file: undefined };
+      clips.push({ ...clip, src: "", file: undefined });
+      continue;
     }
     let file = clip.file instanceof File ? clip.file : undefined;
     if (!file && clip.src?.startsWith("blob:")) {
@@ -79,11 +82,9 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
       }
     }
     if (!file) {
-      if (clip.opfsMedia) {
-        retainedMedia.add(clip.opfsMedia);
-        return { ...clip, src: "", file: undefined, mediaMissing: true };
-      }
-      return { ...clip, src: "", file: undefined, mediaMissing: true };
+      if (clip.opfsMedia) retainedMedia.add(clip.opfsMedia);
+      clips.push({ ...clip, src: "", file: undefined, mediaMissing: true });
+      continue;
     }
     const mediaName = `${clip.id || index}-${safeProjectName(clip.name || `asset-${index}`)}`;
     retainedMedia.add(mediaName);
@@ -95,18 +96,20 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
     } catch { /* New OPFS media file. */ }
     if (!alreadySaved) {
       const writable = await handle.createWritable();
-      await writable.write(await file.arrayBuffer());
+      await writable.write(file);
       await writable.close();
     }
-    return { ...clip, src: "", file: undefined, opfsMedia: mediaName };
-  }));
+    clips.push({ ...clip, src: "", file: undefined, opfsMedia: mediaName });
+  }
+  const stored = { ...project, clips };
+  await writeOpfsText(projectsDirectory, `${project.id}.json`, JSON.stringify(stored));
+  // Only remove stale media after the new manifest is safely written. If saving
+  // the manifest fails, keep the old media so the previous project remains recoverable.
   for await (const entry of mediaDirectory.values()) {
     if (entry.kind === "file" && !retainedMedia.has(entry.name)) {
       await mediaDirectory.removeEntry(entry.name);
     }
   }
-  const stored = { ...project, clips };
-  await writeOpfsText(projectsDirectory, `${project.id}.json`, JSON.stringify(stored));
   browserProjects.set(projectKey(ownerId, project.id), project);
 }
 
