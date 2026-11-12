@@ -59,10 +59,7 @@ const writeOpfsText = async (directory: OpfsDirectoryHandle, name: string, conte
 
 async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: string): Promise<void> {
   const root = await browserRoot(ownerId);
-  if (!root) {
-    browserProjects.set(projectKey(ownerId, project.id), project);
-    return;
-  }
+  if (!root) throw new Error("Persistent local storage is unavailable. Use a supported browser or the Windows app.");
   const projectsDirectory = await root.getDirectoryHandle("projects", { create: true });
   const mediaDirectory = await (await root.getDirectoryHandle("media", { create: true }))
     .getDirectoryHandle(project.id, { create: true });
@@ -139,7 +136,7 @@ export async function listProjects(ownerId: string): Promise<StoredProject[]> {
   const accountId = safeOwnerId(ownerId);
   if (isDesktop()) return sortRecent(await invoke<StoredProject[]>("list_projects", { ownerId: accountId }));
   const root = await browserRoot(accountId);
-  if (!root) return sortRecent(Array.from(browserProjects.entries()).filter(([key]) => key.startsWith(`${accountId}:`)).map(([, project]) => project));
+  if (!root) throw new Error("Persistent local storage is unavailable in this browser.");
   const directory = await root.getDirectoryHandle("projects", { create: true });
   const projects: StoredProject[] = [];
   for await (const entry of directory.values()) {
@@ -154,7 +151,7 @@ export async function loadProject<T>(id: string, ownerId: string): Promise<Store
   const accountId = safeOwnerId(ownerId);
   if (isDesktop()) return await invoke<StoredProject<T> | null>("load_project", { id, ownerId: accountId });
   const root = await browserRoot(accountId);
-  if (!root) return (browserProjects.get(projectKey(accountId, id)) as StoredProject<T> | undefined) ?? null;
+  if (!root) throw new Error("Persistent local storage is unavailable in this browser.");
   try {
     const directory = await root.getDirectoryHandle("projects");
     const handle = await directory.getFileHandle(`${id}.json`);
