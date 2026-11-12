@@ -285,9 +285,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     if (cutAt <= 0.08 || cutAt >= active.duration - 0.08) return setNotice("Move the playhead inside the selected clip before splitting.");
     const right: Clip = {
       ...active, id: crypto.randomUUID(), name: active.name + " (split)",
-      start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt
+      start: playhead, sourceIn: active.sourceIn + cutAt, duration: active.duration - cutAt, durationEstimated: false
     };
-    updateTimeline(old => old.flatMap(c => c.id === active.id ? [{ ...c, duration: cutAt }, right] : [c]));
+    updateTimeline(old => old.flatMap(c => c.id === active.id ? [{ ...c, duration: cutAt, durationEstimated: false }, right] : [c]));
     setSelected(right.id);setSelectedIds([right.id]);
     setNotice("Clip split at playhead.");
   };
@@ -303,13 +303,14 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
         name: c.name + " (split)",
         start: playhead,
         sourceIn: c.sourceIn + leftDuration,
-        duration: c.duration - leftDuration
+        duration: c.duration - leftDuration,
+        durationEstimated: false
       };
     });
     const rightById = new Map<string, Clip>(targets.map((c, i) => [c.id, rightClips[i]] as const));
     updateTimeline(old => old.flatMap(c => {
       const right = rightById.get(c.id);
-      return right ? [{ ...c, duration: playhead - c.start }, right] : [c];
+      return right ? [{ ...c, duration: playhead - c.start, durationEstimated: false }, right] : [c];
     }));
     setSelected(rightClips[0].id);setSelectedIds(rightClips.map(c=>c.id));
     setNotice(`Split all tracks: ${rightClips.length} clip(s) cut at playhead.`);
@@ -643,14 +644,14 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               const safeStart=Math.min(originalEnd-0.1,Math.max(0,nextStart));
               setClips(old=>old.map(item=>item.id===drag.id?{
                 ...item,start:safeStart,duration:originalEnd-safeStart,
-                sourceIn:Math.max(0,drag.originalSourceIn+(safeStart-drag.originalStart))
+                sourceIn:Math.max(0,drag.originalSourceIn+(safeStart-drag.originalStart)),durationEstimated:false
               }:item));
             } else {
               const candidate=Math.max(drag.originalStart+0.1,drag.originalStart+drag.originalDuration+dx/scale);
               const snapPoints=[playhead,...clips.filter(item=>item.id!==drag.id).flatMap(item=>[item.start,item.start+item.duration])];
               let nextEnd=candidate,snapDistance=0.18;
               snapPoints.forEach(point=>{const delta=Math.abs(point-candidate);if(delta<snapDistance){snapDistance=delta;nextEnd=point;}});
-              setClips(old=>old.map(item=>item.id===drag.id?{...item,duration:Math.max(0.1,nextEnd-drag.originalStart)}:item));
+              setClips(old=>old.map(item=>item.id===drag.id?{...item,duration:Math.max(0.1,nextEnd-drag.originalStart),durationEstimated:false}:item));
             }
           }} onPointerUp={e=>{
             const drag=touchDrag.current;
