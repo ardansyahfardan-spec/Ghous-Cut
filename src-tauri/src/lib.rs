@@ -2,8 +2,11 @@ use std::{fs, path::PathBuf, process::Command};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
-fn projects_directory(app: &AppHandle) -> Result<PathBuf, String> {
+fn projects_directory(app: &AppHandle, owner_id: &str) -> Result<PathBuf, String> {
+    if !valid_project_id(owner_id) { return Err("Invalid account ID for local storage.".into()); }
     let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
+    directory.push("users");
+    directory.push(owner_id);
     directory.push("projects");
     fs::create_dir_all(&directory).map_err(|e| format!("Cannot create local projects folder: {e}"))?;
     Ok(directory)
@@ -46,7 +49,7 @@ fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
 }
 
 #[tauri::command]
-fn load_project(app: AppHandle, id: String) -> Result<Option<Value>, String> {
+fn load_project(app: AppHandle, id: String, owner_id: String) -> Result<Option<Value>, String> {
     if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
     let directory = projects_directory(&app)?;
     recover_project_backups(&directory)?;
@@ -58,10 +61,10 @@ fn load_project(app: AppHandle, id: String) -> Result<Option<Value>, String> {
 }
 
 #[tauri::command]
-fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
+fn save_project(app: AppHandle, project: Value, owner_id: String) -> Result<(), String> {
     let id = project.get("id").and_then(Value::as_str).ok_or("Project ID is missing.")?;
     if !valid_project_id(id) { return Err("Invalid project ID.".into()); }
-    let mut path = projects_directory(&app)?;
+    let mut path = projects_directory(&app, &owner_id)?;
     path.push(format!("{id}.json"));
     let mut temporary = path.clone();
     let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
@@ -96,9 +99,9 @@ fn save_project(app: AppHandle, project: Value) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn delete_project(app: AppHandle, id: String) -> Result<(), String> {
+fn delete_project(app: AppHandle, id: String, owner_id: String) -> Result<(), String> {
     if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
-    let mut path = projects_directory(&app)?;
+    let mut path = projects_directory(&app, &owner_id)?;
     path.push(format!("{id}.json"));
     if path.exists() { fs::remove_file(path).map_err(|e| e.to_string())?; }
     Ok(())
