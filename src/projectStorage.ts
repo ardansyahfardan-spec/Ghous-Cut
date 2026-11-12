@@ -97,8 +97,8 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
   browserProjects.set(projectKey(ownerId, project.id), project);
 }
 
-async function restoreBrowserProject<T>(project: StoredProject<T>, previewOnly = false): Promise<StoredProject<T>> {
-  const root = await browserRoot(accountId);
+async function restoreBrowserProject<T>(project: StoredProject<T>, ownerId: string, previewOnly = false): Promise<StoredProject<T>> {
+  const root = await browserRoot(ownerId);
   if (!root) return project;
   let mediaDirectory: OpfsDirectoryHandle;
   try {
@@ -123,11 +123,11 @@ async function restoreBrowserProject<T>(project: StoredProject<T>, previewOnly =
   return { ...project, clips };
 }
 
-async function readStoredProject<T>(file: File, previewOnly = false): Promise<StoredProject<T> | null> {
+async function readStoredProject<T>(file: File, ownerId: string, previewOnly = false): Promise<StoredProject<T> | null> {
   try {
     const project = JSON.parse(await file.text()) as StoredProject<T>;
     if (!project?.id || !Array.isArray(project.clips)) return null;
-    return await restoreBrowserProject(project, previewOnly);
+    return await restoreBrowserProject(project, ownerId, previewOnly);
   } catch {
     return null;
   }
@@ -138,13 +138,13 @@ const sortRecent = (projects: StoredProject[]) => projects.sort((a, b) => b.upda
 export async function listProjects(ownerId: string): Promise<StoredProject[]> {
   const accountId = safeOwnerId(ownerId);
   if (isDesktop()) return sortRecent(await invoke<StoredProject[]>("list_projects", { ownerId: accountId }));
-  const root = await browserRoot();
+  const root = await browserRoot(accountId);
   if (!root) return sortRecent(Array.from(browserProjects.entries()).filter(([key]) => key.startsWith(`${accountId}:`)).map(([, project]) => project));
   const directory = await root.getDirectoryHandle("projects", { create: true });
   const projects: StoredProject[] = [];
   for await (const entry of directory.values()) {
     if (entry.kind !== "file" || !entry.name.endsWith(".json")) continue;
-    const project = await readStoredProject(await (entry as OpfsFileHandle).getFile(), true);
+    const project = await readStoredProject(await (entry as OpfsFileHandle).getFile(), accountId, true);
     if (project) projects.push(project);
   }
   return sortRecent(projects);
@@ -158,7 +158,7 @@ export async function loadProject<T>(id: string, ownerId: string): Promise<Store
   try {
     const directory = await root.getDirectoryHandle("projects");
     const handle = await directory.getFileHandle(`${id}.json`);
-    const project = await readStoredProject<T>(await handle.getFile());
+    const project = await readStoredProject<T>(await handle.getFile(), accountId);
     if (project) browserProjects.set(projectKey(accountId, id), project);
     return project;
   } catch {
@@ -206,7 +206,7 @@ export async function deleteProject(id: string, ownerId: string): Promise<void> 
       return;
     }
     browserProjects.delete(projectKey(accountId, id));
-    const root = await browserRoot();
+    const root = await browserRoot(accountId);
     if (!root) return;
     try {
       const projects = await root.getDirectoryHandle("projects");
