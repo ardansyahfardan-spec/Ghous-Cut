@@ -344,7 +344,7 @@ export async function importProjectFile(file: File, ownerId: string): Promise<St
   const clips = await Promise.all(parsed.project.clips.map(async (clip, index) => {
     const item = clip as PortableClip & { packageMedia?: string };
     const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
-    if (!mediaBytes) return { ...item, src: "", file: undefined };
+    if (!mediaBytes) return { ...item, path: "", src: "", file: undefined, mediaMissing: true, packageMedia: undefined };
     const extension = item.name?.split(".").pop()?.toLowerCase() || "bin";
     const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);
     new Uint8Array(mediaBuffer).set(mediaBytes);
