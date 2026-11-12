@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync, Zip, ZipPassThrough } from "fflate";
 
 export type StoredProject<T = any> = {
   id: string;
@@ -268,6 +268,113 @@ async function browserMediaBytes(clip: PortableClip): Promise<Uint8Array | null>
   return null;
 }
 
+
+type BrowserSavePicker = (options: {
+  suggestedName: string;
+  types: Array<{ description: string; accept: Record<string, string[]> }>;
+}) => Promise<{ createWritable(): Promise<{ write(data: Uint8Array): Promise<void>; close(): Promise<void>; abort?(): Promise<void> }> }>;
+
+async function streamBrowserProjectArchive<T>(project: StoredProject<T>, safeName: string): Promise<boolean | null> {
+  const picker = (window as Window & { showSaveFilePicker?: BrowserSavePicker }).showSaveFilePicker;
+  if (!picker) return null;
+
+  let handle: Awaited<ReturnType<BrowserSavePicker>>;
+  try {
+    handle = await picker({
+      suggestedName: `${safeName}.ghcut`,
+      types: [{ description: "Ghous Cut Project", accept: { "application/vnd.ghouscut.project+zip": [".ghcut"] } }]
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return false;
+    throw error;
+  }
+
+  const writer = await handle.createWritable();
+  let writeQueue = Promise.resolve();
+  let writeError: unknown = null;
+  let finishOutput!: () => void;
+  let failOutput!: (error: unknown) => void;
+  const outputFinished = new Promise<void>((resolve, reject) => {
+    finishOutput = resolve;
+    failOutput = reject;
+  });
+  const zip = new Zip();
+  zip.ondata = (error, chunk, final) => {
+    if (error) {
+      failOutput(error);
+      return;
+    }
+    if (chunk?.length) {
+      writeQueue = writeQueue.then(() => writer.write(chunk)).catch(error => {
+        writeError = error;
+        failOutput(error);
+      });
+    }
+    if (final) finishOutput();
+  };
+
+  const mediaEntries: Array<{ path: string; blob: Blob }> = [];
+  const portableClips = [];
+  for (let index = 0; index < project.clips.length; index += 1) {
+    const rawClip = project.clips[index];
+    const item = rawClip as T & PortableClip & { kind?: string };
+    const mediaPath = `media/${String(index).padStart(4, "0")}-${safeProjectName(item.name || `asset-${index}`)}`;
+    let blob: Blob | null = item.file instanceof Blob ? item.file : null;
+    if (!blob && item.src) {
+      try {
+        const response = await fetch(item.src);
+        if (response.ok) blob = await response.blob();
+      } catch { /* Relinked media is required when its source cannot be read. */ }
+    }
+    if (item.kind && ["video", "image", "audio"].includes(item.kind) && (!blob || !blob.size)) {
+      await writer.abort?.();
+      throw new Error(`Media "${item.name || "unnamed"}" is unavailable. Relink the original file before exporting this project.`);
+    }
+    if (blob) mediaEntries.push({ path: mediaPath, blob });
+    const { file: _file, src: _src, ...metadata } = item;
+    portableClips.push({ ...metadata, src: "", ...(blob ? { packageMedia: mediaPath } : {}) });
+  }
+
+  const manifest = {
+    format: "ghous-cut-project",
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    project: { ...project, clips: portableClips }
+  };
+
+  try {
+    const manifestEntry = new ZipPassThrough("manifest.json");
+    zip.add(manifestEntry);
+    manifestEntry.push(strToU8(JSON.stringify(manifest, null, 2)), true);
+
+    for (const entry of mediaEntries) {
+      const zipEntry = new ZipPassThrough(entry.path);
+      zip.add(zipEntry);
+      const reader = entry.blob.stream().getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value?.length) zipEntry.push(value);
+        }
+        zipEntry.push(new Uint8Array(0), true);
+      } finally {
+        reader.releaseLock();
+      }
+    }
+
+    zip.end();
+    await outputFinished;
+    await writeQueue;
+    if (writeError) throw writeError;
+    await writer.close();
+    return true;
+  } catch (error) {
+    try { await writer.abort?.(); } catch { /* Preserve the original export error. */ }
+    throw error;
+  }
+}
+
 export async function exportProjectFile<T>(project: StoredProject<T>): Promise<boolean> {
   const safeName = safeProjectName(project.name);
   if (isDesktop()) {
@@ -287,6 +394,12 @@ export async function exportProjectFile<T>(project: StoredProject<T>): Promise<b
     await invoke("export_project_archive", { project: portableProject, outputPath: path });
     return true;
   }
+  const streamed = await streamBrowserProjectArchive(project, safeName);
+  if (streamed !== null) return streamed;
+
+  // Compatibility fallback for browsers without the File System Access API.
+  // This path still buffers the archive in memory; streaming is used wherever
+  // the browser provides a writable save-file handle.
   const media: Record<string, Uint8Array> = {};
   const portableClips = await Promise.all(project.clips.map(async (clip, index) => {
     const item = clip as T & PortableClip;
