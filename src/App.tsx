@@ -72,7 +72,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
         src: c.file ? URL.createObjectURL(c.file) : (isDesktop ? convertFileSrc(c.path) : c.src)
       }));
       setClips(restored);
-      setNotice(isDesktop ? "Project restored from local files on this PC." : "Project timeline restored. Re-import its source media in this browser session.");
+      const missingMedia = restored.filter(c => (c as Clip & { mediaMissing?: boolean }).mediaMissing).length;
+      setNotice(isDesktop
+        ? "Project restored from local files on this PC."
+        : missingMedia
+          ? `${missingMedia} source media file(s) are missing from this device. Relink the original files to continue editing.`
+          : "Project and source media restored from this device’s local browser storage.");
     }).catch(() => {
       if (alive) setNotice("Local project storage is unavailable in this browser.");
     }).finally(() => { if (alive) setProjectReady(true); });
