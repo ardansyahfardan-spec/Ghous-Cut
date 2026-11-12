@@ -234,38 +234,17 @@ const mediaMimeType = (name = "") => {
 
 async function browserMediaBytes(clip: PortableClip): Promise<Uint8Array | null> {
   if (clip.file instanceof File) return new Uint8Array(await clip.file.arrayBuffer());
-  if (clip.src?.startsWith("blob:")) {
-    const response = await fetch(clip.src);
-    if (response.ok) return new Uint8Array(await response.arrayBuffer());
+  if (clip.src) {
+    try {
+      const response = await fetch(clip.src);
+      if (response.ok) return new Uint8Array(await response.arrayBuffer());
+    } catch { /* The source may need relinking before export. */ }
   }
   return null;
 }
 
 export async function exportProjectFile<T>(project: StoredProject<T>): Promise<boolean> {
   const safeName = safeProjectName(project.name);
-
-  if (isDesktop()) {
-    const portable = {
-      format: "ghous-cut-project",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      project: {
-        ...project,
-        clips: project.clips.map(clip => {
-          const item = clip as T & { src?: string; file?: File };
-          return { ...item, src: "", file: undefined };
-        })
-      }
-    };
-    const path = await saveDialog({
-      defaultPath: `${safeName}.ghcut`,
-      filters: [{ name: "Ghous Cut Project", extensions: ["ghcut"] }]
-    });
-    if (!path) return false;
-    await invoke("write_project_file", { path, content: JSON.stringify(portable, null, 2) });
-    return true;
-  }
-
   const media: Record<string, Uint8Array> = {};
   const portableClips = await Promise.all(project.clips.map(async (clip, index) => {
     const item = clip as T & PortableClip;
@@ -287,6 +266,17 @@ export async function exportProjectFile<T>(project: StoredProject<T>): Promise<b
     ...media
   }, { level: 1 });
   const blob = new Blob([archive], { type: "application/vnd.ghouscut.project+zip" });
+
+  if (isDesktop()) {
+    const path = await saveDialog({
+      defaultPath: `${safeName}.ghcut`,
+      filters: [{ name: "Ghous Cut Project", extensions: ["ghcut"] }]
+    });
+    if (!path) return false;
+    await invoke("write_project_file", { path, content: Array.from(archive) });
+    return true;
+  }
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -324,23 +314,32 @@ export async function importProjectFile(file: File, ownerId: string): Promise<St
   }
 
   const now = Date.now();
+  const projectId = crypto.randomUUID();
+  const clips = await Promise.all(parsed.project.clips.map(async clip => {
+    const item = clip as PortableClip & { packageMedia?: string };
+    const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
+    if (!mediaBytes) return { ...item, src: "", file: undefined };
+    const extension = item.name?.split(".").pop()?.toLowerCase() || "bin";
+    const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);
+    new Uint8Array(mediaBuffer).set(mediaBytes);
+    const mediaName = item.name || `media.${extension}`;
+    const mediaFile = new File([mediaBuffer], mediaName, { type: mediaMimeType(mediaName) });
+    if (isDesktop()) {
+      const path = await invoke<string>("save_project_media", {
+        ownerId: safeOwnerId(ownerId),
+        projectId,
+        filename: safeProjectName(mediaName),
+        content: Array.from(mediaBytes)
+      });
+      return { ...item, path, src: "", file: undefined, packageMedia: undefined };
+    }
+    return { ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined };
+  }));
   const project: StoredProject = {
     ...parsed.project,
-    id: crypto.randomUUID(),
+    id: projectId,
     name: parsed.project.name,
-    clips: parsed.project.clips.map(clip => {
-      const item = clip as PortableClip & { packageMedia?: string };
-      const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
-      if (mediaBytes) {
-        const extension = item.name?.split(".").pop()?.toLowerCase() || "bin";
-        const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);
-        new Uint8Array(mediaBuffer).set(mediaBytes);
-        const mediaName = item.name || `media.${extension}`;
-        const mediaFile = new File([mediaBuffer], mediaName, { type: mediaMimeType(mediaName) });
-        return { ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined };
-      }
-      return { ...item, src: "", file: undefined };
-    }),
+    clips,
     createdAt: now,
     updatedAt: now
   };
