@@ -66,21 +66,28 @@ function EditorWorkspace({ projectId, projectName, ownerId, aspectRatio, onAspec
 
   useEffect(() => {
     let alive = true;
-    loadProject<Clip>(projectId, ownerId).then(project => {
+    loadProject<Clip>(projectId, ownerId).then(async project => {
       if (!alive || !project) return;
-      const restored = project.clips.map(c => ({
-        ...c,
-        src: c.file ? URL.createObjectURL(c.file) : (isDesktop ? convertFileSrc(c.path) : c.src)
+      const restored = await Promise.all(project.clips.map(async c => {
+        if (c.file) return { ...c, src: URL.createObjectURL(c.file), mediaMissing: false };
+        if (isDesktop) {
+          const exists = c.path
+            ? await invoke<boolean>("project_media_exists", { path: c.path }).catch(() => false)
+            : false;
+          return { ...c, src: exists ? convertFileSrc(c.path) : "", mediaMissing: !exists };
+        }
+        return { ...c, src: c.src, mediaMissing: c.mediaMissing ?? !c.src };
       }));
+      if (!alive) return;
       setClips(restored);
-      const missingMedia = restored.filter(c => (c as Clip & { mediaMissing?: boolean }).mediaMissing).length;
-      setNotice(isDesktop
-        ? "Project restored from local files on this PC."
-        : missingMedia
-          ? `${missingMedia} source media file(s) are missing from this device. Relink the original files to continue editing.`
+      const missingMedia = restored.filter(c => c.mediaMissing).length;
+      setNotice(missingMedia
+        ? `${missingMedia} media sumber tidak ditemukan. Pilih Import Media dan tautkan ulang file dengan nama yang sama.`
+        : isDesktop
+          ? "Project restored from local files on this PC."
           : "Project and source media restored from this device’s local browser storage.");
     }).catch(() => {
-      if (alive) setNotice("Local project storage is unavailable in this browser.");
+      if (alive) setNotice("Local project storage is unavailable on this device.");
     }).finally(() => { if (alive) setProjectReady(true); });
     return () => { alive = false; };
   }, [projectId, ownerId]);
@@ -211,21 +218,31 @@ function EditorWorkspace({ projectId, projectName, ownerId, aspectRatio, onAspec
       return { path, kind, src, duration };
     }));
     const failed = prepared.filter(item => item.duration === null).map(item => basename(item.path));
+    const relinked = new Map<string, Clip>();
     const newClips: Clip[] = [];
     for (const item of prepared) {
       if (item.duration === null) continue;
+      const missing = clips.find(c =>
+        c.mediaMissing && !relinked.has(c.id) &&
+        c.name.toLowerCase() === basename(item.path).toLowerCase() && c.kind === item.kind
+      );
+      if (missing) {
+        relinked.set(missing.id, { ...missing, path: item.path, src: item.src, mediaMissing: false });
+        continue;
+      }
       const track = item.kind === "audio" ? 2 : item.kind === "image" ? 1 : 0;
       const start = cursors.get(track) ?? 0;
       cursors.set(track, start + item.duration);
       newClips.push({
         id: crypto.randomUUID(), name: basename(item.path), path: item.path,
         src: item.src, kind: item.kind, track, start, sourceIn: 0,
-        duration: item.duration, volume: 1, durationEstimated: false
+        duration: item.duration, volume: 1, durationEstimated: false, mediaMissing: false
       });
     }
-    updateTimeline(old => [...old, ...newClips]);
-    if (newClips[0]) { setSelected(newClips[0].id); setSelectedIds([newClips[0].id]); setPlayhead(newClips[0].start); }
-    setNotice(`Imported ${newClips.length} media file(s).${failed.length ? ` · ${failed.length} file(s) could not be read: ${failed.join(", ")}` : ""}`);
+    updateTimeline(old => [...old.map(c => relinked.get(c.id) ?? c), ...newClips]);
+    const first = [...relinked.values(), ...newClips][0];
+    if (first) { setSelected(first.id); setSelectedIds([first.id]); setPlayhead(first.start); }
+    setNotice(`${relinked.size} media ditautkan ulang · ${newClips.length} media baru diimpor.${failed.length ? ` · ${failed.length} file tidak dapat dibaca: ${failed.join(", ")}` : ""}`);
   };
 
   const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number | null> => {
@@ -1050,7 +1067,7 @@ export default function App() {
     </header>
     <section className="library-content">
       <div className="library-welcome">
-        <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut menyimpan susunan proyek; media sumber tetap di perangkatmu.</p></div>
+        <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut membawa susunan proyek beserta media sumber agar bisa dipindahkan ke perangkat lain.</p></div>
         <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
       </div>
       <div className="local-storage-info">
