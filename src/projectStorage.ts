@@ -12,6 +12,12 @@ export type StoredProject<T = any> = {
 };
 
 const browserProjects = new Map<string, StoredProject>();
+const projectKey = (ownerId: string, id: string) => `${ownerId}:${id}`;
+const safeOwnerId = (ownerId: string) => {
+  const value = ownerId.trim();
+  if (!value || !/^[a-zA-Z0-9_-]+$/.test(value)) throw new Error("Invalid account ID for local storage.");
+  return value;
+};
 const projectSaveQueues = new Map<string, Promise<void>>();
 const isDesktop = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -32,14 +38,16 @@ type OpfsDirectoryHandle = {
   values(): AsyncIterable<OpfsFileHandle | OpfsDirectoryHandle>;
 };
 
-const browserRoot = async (): Promise<OpfsDirectoryHandle | null> => {
+const browserRoot = async (ownerId: string): Promise<OpfsDirectoryHandle | null> => {
   if (typeof navigator === "undefined") return null;
   const storage = (navigator as Navigator & {
     storage?: { getDirectory?: () => Promise<OpfsDirectoryHandle> };
   }).storage;
   if (!storage?.getDirectory) return null;
   const root = await storage.getDirectory();
-  return await root.getDirectoryHandle("ghouscut", { create: true }) as unknown as OpfsDirectoryHandle;
+  const appRoot = await root.getDirectoryHandle("ghouscut", { create: true });
+  const users = await appRoot.getDirectoryHandle("users", { create: true });
+  return await users.getDirectoryHandle(safeOwnerId(ownerId), { create: true }) as unknown as OpfsDirectoryHandle;
 };
 
 const writeOpfsText = async (directory: OpfsDirectoryHandle, name: string, content: string) => {
@@ -49,10 +57,10 @@ const writeOpfsText = async (directory: OpfsDirectoryHandle, name: string, conte
   await writable.close();
 };
 
-async function persistBrowserProject<T>(project: StoredProject<T>): Promise<void> {
-  const root = await browserRoot();
+async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: string): Promise<void> {
+  const root = await browserRoot(ownerId);
   if (!root) {
-    browserProjects.set(project.id, project);
+    browserProjects.set(projectKey(ownerId, project.id), project);
     return;
   }
   const projectsDirectory = await root.getDirectoryHandle("projects", { create: true });
@@ -86,11 +94,11 @@ async function persistBrowserProject<T>(project: StoredProject<T>): Promise<void
   }));
   const stored = { ...project, clips };
   await writeOpfsText(projectsDirectory, `${project.id}.json`, JSON.stringify(stored));
-  browserProjects.set(project.id, project);
+  browserProjects.set(projectKey(ownerId, project.id), project);
 }
 
 async function restoreBrowserProject<T>(project: StoredProject<T>, previewOnly = false): Promise<StoredProject<T>> {
-  const root = await browserRoot();
+  const root = await browserRoot(accountId);
   if (!root) return project;
   let mediaDirectory: OpfsDirectoryHandle;
   try {
@@ -127,10 +135,11 @@ async function readStoredProject<T>(file: File, previewOnly = false): Promise<St
 
 const sortRecent = (projects: StoredProject[]) => projects.sort((a, b) => b.updatedAt - a.updatedAt);
 
-export async function listProjects(): Promise<StoredProject[]> {
-  if (isDesktop()) return sortRecent(await invoke<StoredProject[]>("list_projects"));
+export async function listProjects(ownerId: string): Promise<StoredProject[]> {
+  const accountId = safeOwnerId(ownerId);
+  if (isDesktop()) return sortRecent(await invoke<StoredProject[]>("list_projects", { ownerId: accountId }));
   const root = await browserRoot();
-  if (!root) return sortRecent(Array.from(browserProjects.values()));
+  if (!root) return sortRecent(Array.from(browserProjects.entries()).filter(([key]) => key.startsWith(`${accountId}:`)).map(([, project]) => project));
   const directory = await root.getDirectoryHandle("projects", { create: true });
   const projects: StoredProject[] = [];
   for await (const entry of directory.values()) {
@@ -141,15 +150,16 @@ export async function listProjects(): Promise<StoredProject[]> {
   return sortRecent(projects);
 }
 
-export async function loadProject<T>(id: string): Promise<StoredProject<T> | null> {
-  if (isDesktop()) return await invoke<StoredProject<T> | null>("load_project", { id });
+export async function loadProject<T>(id: string, ownerId: string): Promise<StoredProject<T> | null> {
+  const accountId = safeOwnerId(ownerId);
+  if (isDesktop()) return await invoke<StoredProject<T> | null>("load_project", { id, ownerId: accountId });
   const root = await browserRoot();
-  if (!root) return (browserProjects.get(id) as StoredProject<T> | undefined) ?? null;
+  if (!root) return (browserProjects.get(projectKey(accountId, id)) as StoredProject<T> | undefined) ?? null;
   try {
     const directory = await root.getDirectoryHandle("projects");
     const handle = await directory.getFileHandle(`${id}.json`);
     const project = await readStoredProject<T>(await handle.getFile());
-    if (project) browserProjects.set(id, project);
+    if (project) browserProjects.set(projectKey(accountId, id), project);
     return project;
   } catch {
     return null;
@@ -163,36 +173,39 @@ async function withProjectQueue(id: string, operation: () => Promise<void>): Pro
   try { await next; } finally { if (projectSaveQueues.get(id) === next) projectSaveQueues.delete(id); }
 }
 
-export async function saveProject<T>(id: string, name: string, clips: T[], aspectRatio?: StoredProject<T>["aspectRatio"]): Promise<void> {
-  await withProjectQueue(id, async () => {
+export async function saveProject<T>(id: string, name: string, clips: T[], ownerId: string, aspectRatio?: StoredProject<T>["aspectRatio"]): Promise<void> {
+  const accountId = safeOwnerId(ownerId);
+  await withProjectQueue(projectKey(accountId, id), async () => {
     const current = isDesktop()
-      ? await loadProject<T>(id)
-      : (browserProjects.get(id) as StoredProject<T> | undefined) ?? await loadProject<T>(id);
+      ? await loadProject<T>(id, accountId)
+      : (browserProjects.get(projectKey(accountId, id)) as StoredProject<T> | undefined) ?? await loadProject<T>(id, accountId);
     const project: StoredProject<T> = {
       ...current, id, name, clips,
       ...(aspectRatio ? { aspectRatio } : {}),
       createdAt: current?.createdAt ?? Date.now(),
       updatedAt: Date.now()
     };
-    if (isDesktop()) await invoke<void>("save_project", { project });
+    if (isDesktop()) await invoke<void>("save_project", { project, ownerId: accountId });
+    else await persistBrowserProject(project, accountId);
+  });
+}
+
+export async function createProject<T>(project: StoredProject<T>, ownerId: string): Promise<void> {
+  const accountId = safeOwnerId(ownerId);
+  await withProjectQueue(projectKey(accountId, project.id), async () => {
+    if (isDesktop()) await invoke("save_project", { project, ownerId: accountId });
     else await persistBrowserProject(project);
   });
 }
 
-export async function createProject<T>(project: StoredProject<T>): Promise<void> {
-  await withProjectQueue(project.id, async () => {
-    if (isDesktop()) await invoke("save_project", { project });
-    else await persistBrowserProject(project);
-  });
-}
-
-export async function deleteProject(id: string): Promise<void> {
+export async function deleteProject(id: string, ownerId: string): Promise<void> {
+  const accountId = safeOwnerId(ownerId);
   await withProjectQueue(id, async () => {
     if (isDesktop()) {
-      await invoke("delete_project", { id });
+      await invoke("delete_project", { id, ownerId: accountId });
       return;
     }
-    browserProjects.delete(id);
+    browserProjects.delete(projectKey(accountId, id));
     const root = await browserRoot();
     if (!root) return;
     try {
@@ -286,7 +299,7 @@ export async function exportProjectFile<T>(project: StoredProject<T>): Promise<b
   return true;
 }
 
-export async function importProjectFile(file: File): Promise<StoredProject> {
+export async function importProjectFile(file: File, ownerId: string): Promise<StoredProject> {
   let parsed: {
     format?: string; version?: number; project?: StoredProject;
   };
@@ -334,6 +347,6 @@ export async function importProjectFile(file: File): Promise<StoredProject> {
     createdAt: now,
     updatedAt: now
   };
-  await createProject(project);
+  await createProject(project, ownerId);
   return project;
 }
