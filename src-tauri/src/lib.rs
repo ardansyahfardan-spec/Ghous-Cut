@@ -258,6 +258,9 @@ fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String
         .unwrap_or_default().as_nanos();
     let project_id = format!("import{now:x}");
     let media_directory = project_media_directory(&app, &owner_id, &project_id)?;
+    // Treat extraction and project registration as one operation. If any ZIP
+    // entry is missing/corrupt or the project save fails, remove partial media.
+    let import_result: Result<Value, String> = (|| {
     let clips = project.get_mut("clips").and_then(Value::as_array_mut).unwrap();
     for (index, clip) in clips.iter_mut().enumerate() {
         let object = clip.as_object_mut().ok_or("Invalid project clip metadata.")?;
@@ -294,8 +297,14 @@ fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String
     project["id"] = Value::String(project_id);
     project["createdAt"] = Value::from(now as u64 / 1_000_000);
     project["updatedAt"] = Value::from(now as u64 / 1_000_000);
-    save_project(app, project.clone(), owner_id)?;
+    save_project(app.clone(), project.clone(), owner_id.clone())?;
     Ok(project)
+    })();
+
+    if import_result.is_err() {
+        let _ = fs::remove_dir_all(&media_directory);
+    }
+    import_result
 }
 
 #[tauri::command]
