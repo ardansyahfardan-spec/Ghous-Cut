@@ -14,7 +14,7 @@ type MediaKind = "video" | "image" | "audio";
 type ProjectAspectRatio = "16:9" | "9:16" | "1:1";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
-  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; file?: File;
+  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; durationEstimated?: boolean; file?: File;
 };
 const SCALE = 54;
 const TRACKS = [
@@ -202,7 +202,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
       return {
         id: crypto.randomUUID(), name: basename(path), path,
         src: isDesktop ? convertFileSrc(path) : path,
-        kind, track, start, sourceIn: 0, duration, volume: 1
+        kind, track, start, sourceIn: 0, duration, volume: 1, durationEstimated: kind !== "image"
       };
     });
     updateTimeline(old => [...old, ...newClips]);
@@ -210,7 +210,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     setNotice(`Imported ${newClips.length} media file(s).`);
   };
 
-  const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number> => {
+  const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number | null> => {
     if (kind === "image") return Promise.resolve(5);
     return new Promise(resolve => {
       const media = document.createElement(kind === "audio" ? "audio" : "video");
@@ -218,10 +218,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
       const finish = (duration: number) => {
         media.removeAttribute("src");
         media.load();
-        resolve(Number.isFinite(duration) && duration > 0 ? duration : 10);
+        resolve(Number.isFinite(duration) && duration > 0 ? duration : null);
       };
       media.onloadedmetadata = () => finish(media.duration);
-      media.onerror = () => finish(10);
+      media.onerror = () => finish(Number.NaN);
       media.src = src;
     });
   };
@@ -235,11 +235,13 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     }));
     const relinked = new Map<string, Clip>();
     const additions: Clip[] = [];
+    const failed: string[] = [];
     const cursors = new Map<number, number>();
     for (const clip of clips) {
       cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
     }
     for (const { file, kind, src, duration } of prepared) {
+      if (duration === null) { URL.revokeObjectURL(src); failed.push(file.name); continue; }
       const missing = clips.find(c => !c.src && !relinked.has(c.id) && c.name.toLowerCase() === file.name.toLowerCase());
       if (missing) {
         relinked.set(missing.id, { ...missing, path: file.name, src, file });
@@ -257,7 +259,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     const first = [...relinked.values(), ...additions][0];
     if (first) { setSelected(first.id); setSelectedIds([first.id]); setPlayhead(first.start); }
     const relinkCount = relinked.size;
-    setNotice(`${relinkCount} media relinked · ${additions.length} new media added.`);
+    setNotice(`${relinkCount} media relinked · ${additions.length} new media added.${failed.length ? ` · ${failed.length} file(s) could not be read: ${failed.join(", ")}` : ""}`);
   };
 
   const importMedia = async () => {
@@ -272,7 +274,10 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   };
 
   const updateClip = (id: string, patch: Partial<Clip>) =>
-    updateTimeline(old => old.map(c => c.id === id ? { ...c, ...patch } : c));
+    updateTimeline(old => old.map(c => c.id === id ? { ...c, ...patch, ...("duration" in patch || "sourceIn" in patch ? { durationEstimated: false } : {}) } : c));
+
+  const updateClipMetadata = (id: string, patch: Partial<Clip>) =>
+    setClips(old => old.map(c => c.id === id ? { ...c, ...patch } : c));
 
   const splitSelected = () => {
     if (!active) return setNotice("Select a clip first.");
@@ -404,7 +409,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
         clips: exportClips,
         output,
         aspectRatio,
-        denoise
+        denoise,
+        mutedTracks
       });
       setNotice(result);
     } catch (e) {
@@ -533,7 +539,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               const isActive = activeVisualClips.some(activeClip => activeClip.id === clip.id);
               if (clip.kind === "image") return (
                 <img key={clip.id} src={clip.src} className="preview-media preview-layer image-preview"
-                  style={{ zIndex: clip.track + 1, visibility: isActive ? "visible" : "hidden" }} alt={clip.name}/>
+                  style={{ zIndex: clip.track + 1, opacity: clip.opacity ?? 1, visibility: isActive ? "visible" : "hidden" }} alt={clip.name}/>
               );
               return (
                 <video key={clip.id} ref={element => {
@@ -544,7 +550,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                   muted={false} playsInline preload={isActive ? "auto" : "metadata"}
                   onLoadedMetadata={e => {
                     const d = e.currentTarget.duration;
-                    if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                    if (clip.durationEstimated && Number.isFinite(d) && d > 0) updateClipMetadata(clip.id, { ...(clip.sourceIn === 0 ? { duration: d } : {}), durationEstimated: false });
                   }}
                   onTimeUpdate={e => {
                     if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
@@ -565,7 +571,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
               }} src={clip.src} preload={activeAudioClips.some(activeClip => activeClip.id === clip.id) ? "auto" : "metadata"}
                 onLoadedMetadata={e => {
                   const d = e.currentTarget.duration;
-                  if (Number.isFinite(d) && d > 0 && clip.sourceIn === 0 && Math.abs(clip.duration - d) > 0.1) updateClip(clip.id, { duration: d });
+                  if (clip.durationEstimated && Number.isFinite(d) && d > 0) updateClipMetadata(clip.id, { ...(clip.sourceIn === 0 ? { duration: d } : {}), durationEstimated: false });
                 }}
                 onTimeUpdate={e => {
                   if (playing && clockClip?.id === clip.id) setPlayhead(clip.start + e.currentTarget.currentTime - clip.sourceIn);
