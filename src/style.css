@@ -1090,3 +1090,62 @@ body.library-page #root {
   .zoom-control .zoom-step { min-width: 22px; width: 22px; height: 24px; }
   .zoom-control .zoom-reset { min-width: 34px; }
 }
+
+
+/* Portrait toolbar spacing correction based on iPhone screenshot.
+   Keep primary edit actions on row one and give timeline zoom its own full-width row. */
+@media (max-width: 760px) and (orientation: portrait) {
+  .timeline-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "title primary" "zoom zoom";
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 8px;
+    padding: 9px 10px 8px;
+  }
+  .timeline-title { grid-area: title; min-width: 0; }
+  .portrait-primary-tools {
+    grid-area: primary;
+    margin-left: 0 !important;
+    justify-self: end;
+    gap: 6px !important;
+  }
+  .portrait-primary-tools .tool-btn {
+    flex: 0 0 34px !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+  }
+  .zoom-control {
+    grid-area: zoom;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    justify-self: stretch;
+    gap: 8px !important;
+    margin: 0 !important;
+  }
+  .zoom-control input {
+    flex: 1 1 auto;
+    width: 0 !important;
+    min-width: 40px;
+    max-width: none;
+  }
+  .zoom-control .zoom-step {
+    flex: 0 0 30px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+  }
+  .zoom-control .zoom-reset {
+    flex: 0 0 48px;
+    min-width: 48px;
+    height: 30px;
+  }
+}
+@media (max-width: 390px) and (orientation: portrait) {
+  .timeline-toolbar { column-gap: 7px; row-gap: 7px; padding-inline: 8px; }
+  .portrait-primary-tools .tool-btn { flex-basis: 32px !important; width: 32px !important; min-width: 32px !important; }
+  .zoom-control { gap: 6px !important; }
+}
