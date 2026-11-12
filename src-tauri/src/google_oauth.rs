@@ -46,7 +46,7 @@ fn open_system_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         Command::new("cmd")
-            .args(["/C", "start", "", url])
+            .args(["/C", "start", "", &format!("\"{url}\"")])
             .spawn()
             .map_err(|e| format!("Tidak bisa membuka browser Windows: {e}"))?;
         Ok(())
