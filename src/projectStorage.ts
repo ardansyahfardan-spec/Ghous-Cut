@@ -156,12 +156,13 @@ export async function loadProject<T>(id: string): Promise<StoredProject<T> | nul
   }
 }
 
-export async function saveProject<T>(id: string, name: string, clips: T[]): Promise<void> {
+export async function saveProject<T>(id: string, name: string, clips: T[], aspectRatio?: StoredProject<T>["aspectRatio"]): Promise<void> {
   const current = isDesktop()
     ? await loadProject<T>(id)
     : (browserProjects.get(id) as StoredProject<T> | undefined) ?? await loadProject<T>(id);
   const project: StoredProject<T> = {
     ...current, id, name, clips,
+    ...(aspectRatio ? { aspectRatio } : {}),
     createdAt: current?.createdAt ?? Date.now(),
     updatedAt: Date.now()
   };
