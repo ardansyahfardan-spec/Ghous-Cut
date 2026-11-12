@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
+import { googleAuthConfigured, observeUser, signInWithGoogle, signOutGhous, type GhousUser } from "./auth";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
   Music2, Pause, Play, Scissors, Settings2, Sparkles, Trash2, Video,
@@ -34,7 +35,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<boolean> }) {
+function EditorWorkspace({ projectId, projectName, ownerId, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; ownerId: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<boolean> }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
@@ -65,7 +66,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
 
   useEffect(() => {
     let alive = true;
-    loadProject<Clip>(projectId).then(project => {
+    loadProject<Clip>(projectId, ownerId).then(project => {
       if (!alive || !project) return;
       const restored = project.clips.map(c => ({
         ...c,
@@ -82,12 +83,12 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
       if (alive) setNotice("Local project storage is unavailable in this browser.");
     }).finally(() => { if (alive) setProjectReady(true); });
     return () => { alive = false; };
-  }, [projectId]);
+  }, [projectId, ownerId]);
 
   useEffect(() => {
     if (!projectReady) return;
-    saveProject(projectId, projectName, clips).catch(() => setNotice("Could not autosave this project in local browser storage."));
-  }, [clips, projectReady, projectId, projectName]);
+    saveProject(projectId, projectName, clips, ownerId).catch(() => setNotice("Could not autosave this project in local browser storage."));
+  }, [clips, projectReady, projectId, projectName, ownerId]);
 
   const active = clips.find(c => c.id === selected) || null;
   const selectedClips = useMemo(() => clips.filter(c => selectedIds.includes(c.id)), [clips, selectedIds]);
@@ -820,6 +821,10 @@ function BrandLogo({ size = 28 }: { size?: number }) {
 
 export default function App() {
   const [screen, setScreen] = useState<"splash" | "library" | "editor">("splash");
+  const [authUser, setAuthUser] = useState<GhousUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectCard | null>(null);
   const [search, setSearch] = useState("");
@@ -829,6 +834,14 @@ export default function App() {
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
   const projectFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => observeUser(user => { setAuthUser(user); setAuthReady(true); }, error => { setAuthError(error.message); setAuthReady(true); }), []);
+
+  useEffect(() => {
+    setScreen("splash");
+    setProjects([]);
+    setActiveProject(null);
+  }, [authUser?.uid]);
 
   // The project library uses normal document scrolling. The editor keeps its own
   // fixed-height landscape workspace, so scope viewport rules to the active screen.
@@ -855,7 +868,8 @@ export default function App() {
 
   const importProject = async (file: File) => {
     try {
-      const project = await importProjectFile(file) as ProjectCard;
+      if (!authUser) throw new Error("Silakan login dengan Google terlebih dahulu.");
+      const project = await importProjectFile(file, authUser.uid) as ProjectCard;
       await refreshProjects();
       setActiveProject(project);
       setScreen("editor");
@@ -867,7 +881,8 @@ export default function App() {
 
   const refreshProjects = async () => {
     try {
-      const items = await listProjects();
+      if (!authUser) return;
+      const items = await listProjects(authUser.uid);
       setProjects(items);
       setStorageError("");
     } catch {
@@ -879,7 +894,8 @@ export default function App() {
     let alive = true;
     const timer = window.setTimeout(async () => {
       try {
-        const items = await listProjects();
+        if (!authUser) return;
+        const items = await listProjects(authUser.uid);
         if (alive) setProjects(items);
       } catch {
         if (alive) setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
@@ -894,7 +910,8 @@ export default function App() {
     const now = Date.now();
     const project: ProjectCard = { id: crypto.randomUUID(), name, clips: [], aspectRatio: draftAspectRatio, createdAt: now, updatedAt: now };
     try {
-      await createProject(project);
+      if (!authUser) throw new Error("Login Google diperlukan.");
+      await createProject(project, authUser.uid);
       setProjects(old => [project, ...old]);
       setActiveProject(project);
       setCreating(false);
@@ -907,7 +924,7 @@ export default function App() {
   };
 
   const openProject = async (project: ProjectCard) => {
-    const full = await loadProject<Clip>(project.id);
+    const full = await loadProject<Clip>(project.id, authUser!.uid);
     setActiveProject(full || project);
     setScreen("editor");
   };
@@ -917,7 +934,7 @@ export default function App() {
     if (!nextName?.trim() || nextName.trim() === project.name) return;
     const updated = { ...project, name: nextName.trim(), updatedAt: Date.now() };
     try {
-      await saveProject(updated.id, updated.name, updated.clips);
+      await saveProject(updated.id, updated.name, updated.clips, authUser!.uid);
       setProjects(old => old.map(item => item.id === updated.id ? updated : item));
       setActiveProject(current => current?.id === updated.id ? updated : current);
       setStorageError("");
@@ -929,7 +946,7 @@ export default function App() {
   const duplicateProject = async (project: ProjectCard) => {
     const now = Date.now();
     try {
-      const fullProject = await loadProject<Clip>(project.id) || project;
+      const fullProject = await loadProject<Clip>(project.id, authUser!.uid) || project;
       const duplicate: ProjectCard = {
         ...fullProject,
         id: crypto.randomUUID(),
@@ -938,7 +955,7 @@ export default function App() {
         createdAt: now,
         updatedAt: now
       };
-      await createProject(duplicate);
+      await createProject(duplicate, authUser!.uid);
       setProjects(old => [duplicate, ...old]);
       setStorageError("");
     } catch (error) {
@@ -948,7 +965,7 @@ export default function App() {
 
   const removeProject = async (project: ProjectCard) => {
     if (!window.confirm(`Hapus proyek "${project.name}"? Tindakan ini tidak dapat dibatalkan.`)) return;
-    await deleteProject(project.id);
+    await deleteProject(project.id, authUser!.uid);
     await refreshProjects();
   };
 
@@ -957,6 +974,10 @@ export default function App() {
     .sort((a, b) => sortMode === "recent" ? b.updatedAt - a.updatedAt : a.name.localeCompare(b.name));
 
   const formatDate = (value: number) => new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+
+  if (!googleAuthConfigured) return <main className="auth-gate"><div className="auth-panel"><BrandLogo size={72}/><h1>GHOUS <b>CUT</b></h1><p>Google Login belum dikonfigurasi untuk aplikasi ini.</p><p className="auth-muted">Admin perlu mengisi VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, dan VITE_FIREBASE_APP_ID pada pengaturan deployment. File proyek dan media tetap disimpan lokal di perangkat pengguna.</p></div></main>;
+  if (!authReady) return <main className="splash-screen"><div className="splash-brand-mark"><BrandLogo size={88}/></div><div className="splash-title">GHOUS <span>CUT</span></div><div className="splash-subtitle">MEMERIKSA AKUN</div><div className="splash-loading"><i/></div></main>;
+  if (!authUser) return <main className="auth-gate"><div className="auth-panel"><BrandLogo size={72}/><h1>GHOUS <b>CUT</b></h1><p>Masuk untuk membuka ruang proyek lokal milik akunmu.</p>{authError && <div className="storage-warning">{authError}</div>}<button className="new-project-button auth-google" disabled={authBusy} onClick={() => { setAuthBusy(true); setAuthError(""); void signInWithGoogle().catch(error => setAuthError(error instanceof Error ? error.message : String(error))).finally(() => setAuthBusy(false)); }}>{authBusy ? "Menghubungkan..." : "Lanjutkan dengan Google"}</button><p className="auth-muted">Video, audio, gambar, dan proyek tidak diunggah ke server Ghous Cut. Semua memakai kapasitas penyimpanan perangkatmu.</p></div></main>;
 
   if (screen === "splash") return <main className="splash-screen">
     <div className="splash-glow"/>
@@ -977,7 +998,7 @@ export default function App() {
       if (!current) return;
       const updated = { ...current, aspectRatio: ratio, updatedAt: Date.now() };
       try {
-        await saveProject(updated.id, updated.name, updated.clips, ratio);
+        await saveProject(updated.id, updated.name, updated.clips, authUser!.uid, ratio);
         setActiveProject(updated);
         setProjects(old => old.map(item => item.id === updated.id ? updated : item));
         setStorageError("");
@@ -992,7 +1013,7 @@ export default function App() {
   return <main className="project-library">
     <header className="library-topbar">
       <div className="library-brand"><span className="library-mark"><BrandLogo size={32}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
-      <div className="library-account"><span className="library-online"/><span>Local workspace</span></div>
+      <div className="library-account"><span className="library-online"/><span>{authUser?.displayName || authUser?.email || "Google account"}</span><button className="btn ghost" onClick={() => void signOutGhous()} title="Keluar dari akun">Keluar</button></div>
     </header>
     <section className="library-content">
       <div className="library-welcome">
