@@ -15,7 +15,7 @@ type MediaKind = "video" | "image" | "audio";
 type ProjectAspectRatio = "16:9" | "9:16" | "1:1";
 type Clip = {
   id: string; name: string; path: string; src: string; kind: MediaKind;
-  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; durationEstimated?: boolean; file?: File;
+  track: number; start: number; sourceIn: number; duration: number; volume?: number; opacity?: number; durationEstimated?: boolean; file?: File; mediaMissing?: boolean;
 };
 const SCALE = 54;
 const TRACKS = [
