@@ -53,7 +53,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
   const [notice, setNotice] = useState("Ready when you are. Import media to start editing.");
   const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState<string | null>(null);
-  const touchDrag = useRef<{ id: string; pointerId: number; startX: number; startY: number; originalStart: number; originalDuration: number; originalSourceIn: number; track: number; moved: boolean; mode: "move" | "trim-start" | "trim-end"; group: Clip[] } | null>(null);
+  const touchDrag = useRef<{ id: string; pointerId: number; startX: number; startY: number; originalStart: number; originalDuration: number; originalSourceIn: number; track: number; moved: boolean; mode: "move" | "trim-start" | "trim-end"; group: Clip[]; snapshot: Clip[] } | null>(null);
   const suppressClipClick = useRef(false);
   const scrubbing = useRef(false);
   const [projectReady, setProjectReady] = useState(false);
@@ -657,6 +657,9 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
             const drag=touchDrag.current;
             if(!drag || drag.pointerId!==e.pointerId) return;
             if(drag.moved){
+              undoStack.current.push(drag.snapshot);
+              if(undoStack.current.length>100) undoStack.current.shift();
+              redoStack.current=[];
               setNotice(drag.mode==="move" ? drag.group.length+" klip dipindahkan bersama." : drag.mode==="trim-start" ? "Awal klip disesuaikan." : "Akhir klip disesuaikan.");
               setSelectedIds(drag.mode==="move"?drag.group.map(item=>item.id):[drag.id]);
               setSelected(drag.id);
@@ -717,7 +720,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
                     if(mode!=="move" || !selectedIds.includes(c.id) || e.shiftKey || e.ctrlKey || e.metaKey) selectClip(c,e);
                     setPlayhead(c.start);
                     touchDrag.current={id:c.id,pointerId:e.pointerId,startX:e.clientX,startY:e.clientY,originalStart:c.start,
-                      originalDuration:c.duration,originalSourceIn:c.sourceIn,track:c.track,moved:false,mode,group};
+                      originalDuration:c.duration,originalSourceIn:c.sourceIn,track:c.track,moved:false,mode,group,snapshot:clips.map(item=>({...item}))};
                   }}
                   className={`timeline-clip ${c.kind} ${selectedIds.includes(c.id)?"selected":""}` }
                   style={{left:c.start*scale,width:Math.max(66,c.duration*scale)}}>
