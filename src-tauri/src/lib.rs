@@ -145,6 +145,11 @@ fn save_project_media(
 }
 
 #[tauri::command]
+fn project_media_exists(path: String) -> bool {
+    !path.trim().is_empty() && PathBuf::from(path).is_file()
+}
+
+#[tauri::command]
 fn read_project_media(path: String) -> Result<Vec<u8>, String> {
     if path.trim().is_empty() { return Err("Media source path is required.".into()); }
     let source = PathBuf::from(path);
@@ -371,7 +376,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, read_project_media, write_project_file
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, project_media_exists, read_project_media, write_project_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
