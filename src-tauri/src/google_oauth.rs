@@ -131,7 +131,7 @@ pub fn google_oauth_sign_in(client_id: String) -> Result<String, String> {
     open_system_browser(auth_url.as_str())?;
     let code = read_oauth_callback(listener, &state)?;
 
-    let response: TokenResponse = Client::builder()
+    let token_http_response = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Tidak bisa menyiapkan koneksi OAuth: {e}"))?
@@ -144,11 +144,20 @@ pub fn google_oauth_sign_in(client_id: String) -> Result<String, String> {
             ("redirect_uri", redirect_uri.as_str()),
         ])
         .send()
-        .map_err(|e| format!("Gagal menukar kode login Google: {e}"))?
-        .error_for_status()
-        .map_err(|e| format!("Google menolak pertukaran token: {e}"))?
+        .map_err(|e| format!("Gagal menukar kode login Google: {e}"))?;
+
+    let http_status = token_http_response.status();
+    let response: TokenResponse = token_http_response
         .json()
-        .map_err(|e| format!("Respons token Google tidak valid: {e}"))?;
+        .map_err(|e| format!("Respons token Google tidak valid (HTTP {http_status}): {e}"))?;
+
+    if !http_status.is_success() {
+        let reason = response.error.unwrap_or_else(|| "unknown_error".into());
+        let details = response.error_description.unwrap_or_default();
+        return Err(format!(
+            "Google menolak pertukaran token (HTTP {http_status}): {reason}. {details}"
+        ).trim().to_owned());
+    }
 
     response.id_token.ok_or_else(|| {
         format!(
