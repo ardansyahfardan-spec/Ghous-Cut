@@ -993,6 +993,7 @@ export default function App() {
     key={activeProject.id}
     projectId={activeProject.id}
     projectName={activeProject.name}
+    ownerId={authUser!.uid}
     aspectRatio={activeProject.aspectRatio || "16:9"}
     onAspectRatioChange={async ratio => {
       const current = activeProject;
