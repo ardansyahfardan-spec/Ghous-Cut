@@ -344,26 +344,37 @@ export async function importProjectFile(file: File, ownerId: string): Promise<St
 
   const now = Date.now();
   const projectId = crypto.randomUUID();
-  const clips = await Promise.all(parsed.project.clips.map(async (clip, index) => {
-    const item = clip as PortableClip & { packageMedia?: string };
-    const mediaBytes = item.packageMedia ? archivedMedia[item.packageMedia] : undefined;
-    if (!mediaBytes) return { ...item, src: "", file: undefined, mediaMissing: true, packageMedia: undefined };
-    const extension = item.name?.split(".").pop()?.toLowerCase() || "bin";
-    const mediaBuffer = new ArrayBuffer(mediaBytes.byteLength);
-    new Uint8Array(mediaBuffer).set(mediaBytes);
-    const mediaName = item.name || `media.${extension}`;
-    const mediaFile = new File([mediaBuffer], mediaName, { type: mediaMimeType(mediaName) });
+  const clips = [];
+  for (let index = 0; index < parsed.project.clips.length; index += 1) {
+    const item = parsed.project.clips[index] as PortableClip & { packageMedia?: string };
+    const mediaKey = item.packageMedia;
+    const mediaBytes = mediaKey ? archivedMedia[mediaKey] : undefined;
+    if (!mediaBytes) {
+      clips.push({ ...item, src: "", file: undefined, mediaMissing: true, packageMedia: undefined });
+      continue;
+    }
+    const mediaName = item.name || "media.bin";
     if (isDesktop()) {
+      // Avoid allocating an extra browser File/ArrayBuffer on Windows. The
+      // native app writes each item before moving to the next one.
       const path = await invoke<string>("save_project_media", {
         ownerId: safeOwnerId(ownerId),
         projectId,
         filename: `${String(index).padStart(4, "0")}-${safeProjectName(mediaName)}`,
         content: Array.from(mediaBytes)
       });
-      return { ...item, path, src: "", file: undefined, packageMedia: undefined };
+      clips.push({ ...item, path, src: "", file: undefined, packageMedia: undefined });
+    } else {
+      const extension = mediaName.split(".").pop()?.toLowerCase() || "bin";
+      const mediaBuffer = mediaBytes.buffer.slice(
+        mediaBytes.byteOffset,
+        mediaBytes.byteOffset + mediaBytes.byteLength
+      ) as ArrayBuffer;
+      const mediaFile = new File([mediaBuffer], mediaName, { type: mediaMimeType(mediaName) });
+      clips.push({ ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined });
     }
-    return { ...item, src: URL.createObjectURL(mediaFile), file: mediaFile, packageMedia: undefined };
-  }));
+    if (mediaKey) delete archivedMedia[mediaKey];
+  }
   const project: StoredProject = {
     ...parsed.project,
     id: projectId,
