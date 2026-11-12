@@ -244,6 +244,12 @@ const mediaMimeType = (name = "") => {
 
 async function browserMediaBytes(clip: PortableClip): Promise<Uint8Array | null> {
   if (clip.file instanceof File) return new Uint8Array(await clip.file.arrayBuffer());
+  if (isDesktop() && clip.path) {
+    try {
+      const bytes = await invoke<number[]>("read_project_media", { path: clip.path });
+      return new Uint8Array(bytes);
+    } catch { return null; }
+  }
   if (clip.src) {
     try {
       const response = await fetch(clip.src);
