@@ -198,21 +198,28 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
     for (const clip of clips) {
       cursors.set(clip.track, Math.max(cursors.get(clip.track) ?? 0, clip.start + clip.duration));
     }
-    const newClips: Clip[] = paths.map(path => {
+    const prepared = await Promise.all(paths.map(async path => {
       const kind = kindFrom(path);
-      const track = kind === "audio" ? 2 : kind === "image" ? 1 : 0;
+      const src = convertFileSrc(path);
+      const duration = await readBrowserMediaDuration(src, kind);
+      return { path, kind, src, duration };
+    }));
+    const failed = prepared.filter(item => item.duration === null).map(item => basename(item.path));
+    const newClips: Clip[] = [];
+    for (const item of prepared) {
+      if (item.duration === null) continue;
+      const track = item.kind === "audio" ? 2 : item.kind === "image" ? 1 : 0;
       const start = cursors.get(track) ?? 0;
-      const duration = kind === "image" ? 5 : 10;
-      cursors.set(track, start + duration);
-      return {
-        id: crypto.randomUUID(), name: basename(path), path,
-        src: isDesktop ? convertFileSrc(path) : path,
-        kind, track, start, sourceIn: 0, duration, volume: 1, durationEstimated: kind !== "image"
-      };
-    });
+      cursors.set(track, start + item.duration);
+      newClips.push({
+        id: crypto.randomUUID(), name: basename(item.path), path: item.path,
+        src: item.src, kind: item.kind, track, start, sourceIn: 0,
+        duration: item.duration, volume: 1, durationEstimated: false
+      });
+    }
     updateTimeline(old => [...old, ...newClips]);
     if (newClips[0]) { setSelected(newClips[0].id); setSelectedIds([newClips[0].id]); setPlayhead(newClips[0].start); }
-    setNotice(`Imported ${newClips.length} media file(s).`);
+    setNotice(`Imported ${newClips.length} media file(s).${failed.length ? ` · ${failed.length} file(s) could not be read: ${failed.join(", ")}` : ""}`);
   };
 
   const readBrowserMediaDuration = (src: string, kind: MediaKind): Promise<number | null> => {
