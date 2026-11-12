@@ -228,14 +228,22 @@ fn export_project_archive(project: Value, output_path: String) -> Result<(), Str
 fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String) -> Result<Value, String> {
     if archive_path.trim().is_empty() { return Err("Project archive path is required.".into()); }
     let file = fs::File::open(&archive_path).map_err(|e| format!("Cannot open project archive: {e}"))?;
-    let mut archive = ZipArchive::new(file).map_err(|e| format!("Invalid Ghous Cut archive: {e}"))?;
-    let mut manifest_text = String::new();
-    archive.by_name("manifest.json")
-        .map_err(|_| "Project manifest was not found in this archive.".to_string())?
-        .read_to_string(&mut manifest_text)
-        .map_err(|e| format!("Cannot read project manifest: {e}"))?;
-    let parsed: Value = serde_json::from_str(&manifest_text)
-        .map_err(|e| format!("Invalid project manifest: {e}"))?;
+    let mut archive = ZipArchive::new(file).ok();
+    // Older v1 .ghcut files were plain JSON manifests without embedded media.
+    let parsed: Value = if let Some(zip) = archive.as_mut() {
+        let mut manifest_text = String::new();
+        zip.by_name("manifest.json")
+            .map_err(|_| "Project manifest was not found in this archive.".to_string())?
+            .read_to_string(&mut manifest_text)
+            .map_err(|e| format!("Cannot read project manifest: {e}"))?;
+        serde_json::from_str(&manifest_text)
+            .map_err(|e| format!("Invalid project manifest: {e}"))?
+    } else {
+        let legacy_text = fs::read_to_string(&archive_path)
+            .map_err(|_| "File bukan arsip proyek Ghous Cut yang valid.".to_string())?;
+        serde_json::from_str(&legacy_text)
+            .map_err(|e| format!("Invalid legacy project manifest: {e}"))?
+    };
     let version = parsed.get("version").and_then(Value::as_u64).unwrap_or(0);
     if parsed.get("format").and_then(Value::as_str) != Some("ghous-cut-project") || !(1..=2).contains(&version) {
         return Err("File bukan proyek Ghous Cut yang valid.".into());
@@ -255,23 +263,27 @@ fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String
         let object = clip.as_object_mut().ok_or("Invalid project clip metadata.")?;
         let package_media = object.get("packageMedia").and_then(Value::as_str).map(str::to_owned);
         if let Some(entry_name) = package_media {
-            // Never use archive paths as filesystem paths. Media is written
-            // under generated filenames inside this user's project directory.
-            let original_name = object.get("name").and_then(Value::as_str).unwrap_or("media.bin");
-            let safe_name: String = original_name.chars().map(|ch| {
-                if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' { ch } else { '-' }
-            }).collect();
-            let filename = format!("{index:04}-{}", if safe_name.is_empty() { "media.bin" } else { &safe_name });
-            let destination = media_directory.join(&filename);
-            let mut entry = archive.by_name(&entry_name)
-                .map_err(|_| format!("Media entry {entry_name} is missing from the archive."))?;
-            let mut output = fs::File::create(&destination)
-                .map_err(|e| format!("Cannot create local media file: {e}"))?;
-            copy(&mut entry, &mut output)
-                .map_err(|e| format!("Cannot extract project media: {e}"))?;
-            let path = destination.to_str().ok_or("Local media path is not valid UTF-8.")?;
-            object.insert("path".into(), Value::String(path.to_owned()));
-            object.insert("mediaMissing".into(), Value::Bool(false));
+            if let Some(zip) = archive.as_mut() {
+                // Never use archive paths as filesystem paths. Media is written
+                // under generated filenames inside this user's project directory.
+                let original_name = object.get("name").and_then(Value::as_str).unwrap_or("media.bin");
+                let safe_name: String = original_name.chars().map(|ch| {
+                    if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' { ch } else { '-' }
+                }).collect();
+                let filename = format!("{index:04}-{}", if safe_name.is_empty() { "media.bin" } else { &safe_name });
+                let destination = media_directory.join(&filename);
+                let mut entry = zip.by_name(&entry_name)
+                    .map_err(|_| format!("Media entry {entry_name} is missing from the archive."))?;
+                let mut output = fs::File::create(&destination)
+                    .map_err(|e| format!("Cannot create local media file: {e}"))?;
+                copy(&mut entry, &mut output)
+                    .map_err(|e| format!("Cannot extract project media: {e}"))?;
+                let path = destination.to_str().ok_or("Local media path is not valid UTF-8.")?;
+                object.insert("path".into(), Value::String(path.to_owned()));
+                object.insert("mediaMissing".into(), Value::Bool(false));
+            } else {
+                object.insert("mediaMissing".into(), Value::Bool(true));
+            }
             object.remove("packageMedia");
         } else if ["video", "image", "audio"].contains(&object.get("kind").and_then(Value::as_str).unwrap_or("")) {
             object.insert("mediaMissing".into(), Value::Bool(true));
