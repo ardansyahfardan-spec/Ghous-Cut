@@ -197,7 +197,7 @@ export async function createProject<T>(project: StoredProject<T>, ownerId: strin
 
 export async function deleteProject(id: string, ownerId: string): Promise<void> {
   const accountId = safeOwnerId(ownerId);
-  await withProjectQueue(id, async () => {
+  await withProjectQueue(projectKey(accountId, id), async () => {
     if (isDesktop()) {
       await invoke("delete_project", { id, ownerId: accountId });
       return;
