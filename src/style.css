@@ -1149,3 +1149,24 @@ body.library-page #root {
   .portrait-primary-tools .tool-btn { flex-basis: 32px !important; width: 32px !important; min-width: 32px !important; }
   .zoom-control { gap: 6px !important; }
 }
+
+
+/* Editable output aspect ratio control in the preview header. */
+.aspect-ratio-control { display: inline-flex; align-items: center; }
+.aspect-ratio-select {
+  appearance: none;
+  min-width: 56px;
+  padding: 4px 19px 4px 7px;
+  border: 1px solid var(--gc-border, #303342);
+  border-radius: 4px;
+  color: var(--gc-text, #e9eaf0);
+  background: var(--gc-surface-raised, #191c26);
+  font: 9px 'DM Mono', monospace;
+  cursor: pointer;
+}
+.aspect-ratio-select:focus-visible { outline: 2px solid var(--gc-cream, #d8c9a4); outline-offset: 2px; }
+.aspect-ratio-select option { color: #e9eaf0; background: #191c26; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 760px) {
+  .aspect-ratio-select { min-width: 50px; padding: 4px 15px 4px 5px; font-size: 8px; }
+}

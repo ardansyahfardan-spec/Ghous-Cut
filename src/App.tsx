@@ -34,7 +34,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
+function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioChange, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onAspectRatioChange: (ratio: ProjectAspectRatio) => void; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
@@ -526,7 +526,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 
       <section className="center-panel">
         <div className="preview-panel panel">
-          <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><span>{aspectRatio}</span><span>FIT</span></div></div>
+          <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><label className="aspect-ratio-control"><span className="sr-only">Ukuran video</span><select className="aspect-ratio-select" aria-label="Ukuran video" value={aspectRatio} onChange={event => onAspectRatioChange(event.target.value as ProjectAspectRatio)}><option value="16:9">16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option></select></label><span>FIT</span></div></div>
           <div className="preview-stage">
             {!currentPreview && <div className="preview-empty"><div className="preview-logo"><Clapperboard size={30}/></div><strong>Your story starts here</strong><span>Import a clip and select it in the timeline</span></div>}
             {clips.filter(clip => clip.kind === "video" || clip.kind === "image").map(clip => {
@@ -945,6 +945,19 @@ export default function App() {
     projectId={activeProject.id}
     projectName={activeProject.name}
     aspectRatio={activeProject.aspectRatio || "16:9"}
+    onAspectRatioChange={async ratio => {
+      const current = activeProject;
+      if (!current) return;
+      const updated = { ...current, aspectRatio: ratio, updatedAt: Date.now() };
+      try {
+        await saveProject(updated.id, updated.name, updated.clips, ratio);
+        setActiveProject(updated);
+        setProjects(old => old.map(item => item.id === updated.id ? updated : item));
+        setStorageError("");
+      } catch (error) {
+        setStorageError(`Ukuran video gagal disimpan: ${String(error)}`);
+      }
+    }}
     onBack={async () => { await refreshProjects(); setScreen("library"); }}
     onExportProject={exportProject}
   />;
