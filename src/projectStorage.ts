@@ -78,7 +78,13 @@ async function persistBrowserProject<T>(project: StoredProject<T>, ownerId: stri
         file = new File([blob], clip.name || `media-${index}`, { type: blob.type });
       }
     }
-    if (!file) return { ...clip, src: "", file: undefined };
+    if (!file) {
+      if (clip.opfsMedia) {
+        retainedMedia.add(clip.opfsMedia);
+        return { ...clip, src: "", file: undefined, mediaMissing: true };
+      }
+      return { ...clip, src: "", file: undefined, mediaMissing: true };
+    }
     const mediaName = `${clip.id || index}-${safeProjectName(clip.name || `asset-${index}`)}`;
     retainedMedia.add(mediaName);
     const handle = await mediaDirectory.getFileHandle(mediaName, { create: true });
