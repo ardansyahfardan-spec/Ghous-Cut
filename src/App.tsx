@@ -670,10 +670,8 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onAspectRatioCha
             const drag=touchDrag.current;
             if(!drag || drag.pointerId!==e.pointerId) return;
             if(drag.moved){
-              setNotice(drag.mode==="move" ? drag.group.length+" klip dipindahkan bersama." : drag.mode==="trim-start" ? "Awal klip disesuaikan." : "Akhir klip disesuaikan.");
-              setSelectedIds(drag.mode==="move"?drag.group.map(item=>item.id):[drag.id]);
-              setSelected(drag.id);
-              suppressClipClick.current=true;
+              setClips(drag.snapshot);
+              setNotice("Perubahan drag dibatalkan.");
             }
             touchDrag.current=null;
           }}>
