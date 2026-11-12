@@ -3,6 +3,8 @@ use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
+mod google_oauth;
+
 fn projects_directory(app: &AppHandle, owner_id: &str) -> Result<PathBuf, String> {
     if !valid_project_id(owner_id) { return Err("Invalid account ID for local storage.".into()); }
     let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
@@ -520,7 +522,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, project_media_exists, read_project_media, write_project_file, export_project_archive, import_project_archive
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, project_media_exists, read_project_media, write_project_file, export_project_archive, import_project_archive, google_oauth::google_oauth_sign_in
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
