@@ -16,6 +16,19 @@ fn valid_project_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+fn project_media_directory(app: &AppHandle, owner_id: &str, project_id: &str) -> Result<PathBuf, String> {
+    if !valid_project_id(owner_id) || !valid_project_id(project_id) {
+        return Err("Invalid account or project ID for local media storage.".into());
+    }
+    let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
+    directory.push("users");
+    directory.push(owner_id);
+    directory.push("media");
+    directory.push(project_id);
+    fs::create_dir_all(&directory).map_err(|e| format!("Cannot create local media folder: {e}"))?;
+    Ok(directory)
+}
+
 fn recover_project_backups(directory: &PathBuf) -> Result<(), String> {
     for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -104,11 +117,35 @@ fn delete_project(app: AppHandle, id: String, owner_id: String) -> Result<(), St
     let mut path = projects_directory(&app, &owner_id)?;
     path.push(format!("{id}.json"));
     if path.exists() { fs::remove_file(path).map_err(|e| e.to_string())?; }
+    let mut media = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    media.push("users");
+    media.push(&owner_id);
+    media.push("media");
+    media.push(&id);
+    if media.exists() { fs::remove_dir_all(media).map_err(|e| format!("Cannot remove local project media: {e}"))?; }
     Ok(())
 }
 
 #[tauri::command]
-fn write_project_file(path: String, content: String) -> Result<(), String> {
+fn save_project_media(
+    app: AppHandle,
+    owner_id: String,
+    project_id: String,
+    filename: String,
+    content: Vec<u8>,
+) -> Result<String, String> {
+    if filename.is_empty() || filename == "." || filename == ".." ||
+        !filename.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err("Invalid media filename.".into());
+    }
+    let directory = project_media_directory(&app, &owner_id, &project_id)?;
+    let path = directory.join(filename);
+    fs::write(&path, content).map_err(|e| format!("Cannot save imported project media locally: {e}"))?;
+    path.to_str().map(str::to_owned).ok_or_else(|| "Local media path is not valid UTF-8.".into())
+}
+
+#[tauri::command]
+fn write_project_file(path: String, content: Vec<u8>) -> Result<(), String> {
     if path.trim().is_empty() { return Err("Project export path is required.".into()); }
     fs::write(path, content).map_err(|e| format!("Cannot export project file: {e}"))
 }
@@ -326,7 +363,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, write_project_file
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, write_project_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
