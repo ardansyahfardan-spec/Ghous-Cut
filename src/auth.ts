@@ -1,9 +1,11 @@
 import { initializeApp, getApps } from "firebase/app";
+import { invoke } from "@tauri-apps/api/core";
 import {
   GoogleAuthProvider,
   getAuth,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithCredential,
   signOut,
   type User
 } from "firebase/auth";
@@ -16,6 +18,7 @@ const config = {
 };
 
 export const googleAuthConfigured = Object.values(config).every(value => typeof value === "string" && value.length > 0);
+const googleDesktopClientId = import.meta.env.VITE_GOOGLE_DESKTOP_CLIENT_ID as string | undefined;
 
 const app = googleAuthConfigured
   ? (getApps()[0] ?? initializeApp(config))
@@ -34,6 +37,13 @@ export function observeUser(callback: (user: GhousUser | null) => void, onError:
 
 export async function signInWithGoogle(): Promise<void> {
   if (!auth) throw new Error("Google Login belum dikonfigurasi. Admin perlu mengisi variabel Firebase di pengaturan deployment.");
+  if ("__TAURI_INTERNALS__" in window) {
+    if (!googleDesktopClientId) throw new Error("Google Desktop Client ID belum dikonfigurasi untuk aplikasi Windows.");
+    const idToken = await invoke<string>("google_oauth_sign_in", { clientId: googleDesktopClientId });
+    const credential = GoogleAuthProvider.credential(idToken);
+    await signInWithCredential(auth, credential);
+    return;
+  }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   await signInWithPopup(auth, provider);
