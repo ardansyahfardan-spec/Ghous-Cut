@@ -153,7 +153,7 @@ export async function listProjects(ownerId: string): Promise<StoredProject[]> {
 export async function loadProject<T>(id: string, ownerId: string): Promise<StoredProject<T> | null> {
   const accountId = safeOwnerId(ownerId);
   if (isDesktop()) return await invoke<StoredProject<T> | null>("load_project", { id, ownerId: accountId });
-  const root = await browserRoot();
+  const root = await browserRoot(accountId);
   if (!root) return (browserProjects.get(projectKey(accountId, id)) as StoredProject<T> | undefined) ?? null;
   try {
     const directory = await root.getDirectoryHandle("projects");
