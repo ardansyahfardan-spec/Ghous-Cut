@@ -13,9 +13,28 @@ fn valid_project_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
+fn recover_project_backups(directory: &PathBuf) -> Result<(), String> {
+    for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let backup = entry.path();
+        let Some(name) = backup.file_name().and_then(|value| value.to_str()) else { continue; };
+        if !name.ends_with(".json.bak") { continue; }
+        let mut original_name = name.to_string();
+        original_name.truncate(original_name.len() - 4);
+        let original = directory.join(original_name);
+        if original.exists() {
+            fs::remove_file(&backup).map_err(|e| format!("Cannot clear stale project backup: {e}"))?;
+        } else {
+            fs::rename(&backup, &original).map_err(|e| format!("Cannot recover previous local project save: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
     let directory = projects_directory(&app)?;
+    recover_project_backups(&directory)?;
     let mut projects = Vec::new();
     for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
@@ -29,7 +48,9 @@ fn list_projects(app: AppHandle) -> Result<Vec<Value>, String> {
 #[tauri::command]
 fn load_project(app: AppHandle, id: String) -> Result<Option<Value>, String> {
     if !valid_project_id(&id) { return Err("Invalid project ID.".into()); }
-    let mut path = projects_directory(&app)?;
+    let directory = projects_directory(&app)?;
+    recover_project_backups(&directory)?;
+    let mut path = directory;
     path.push(format!("{id}.json"));
     if !path.exists() { return Ok(None); }
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
