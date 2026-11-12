@@ -45,11 +45,12 @@ fn send_callback_page(stream: &mut TcpStream, success: bool) {
 fn open_system_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        // Pass the complete START command as one /C argument so CMD
-        // parses the quoted URL as a target, not as part of a file path.
-        let command = format!("start \"\" \"{url}\"");
-        Command::new("cmd")
-            .args(["/C", &command])
+        // Launch the URL directly through the Windows URL protocol handler.
+        // Avoid cmd.exe/start parsing: OAuth URLs contain &, ?, and = which
+        // must be passed as one argument without shell interpretation.
+        Command::new("rundll32.exe")
+            .arg("url.dll,FileProtocolHandler")
+            .arg(url)
             .spawn()
             .map_err(|e| format!("Tidak bisa membuka browser Windows: {e}"))?;
         Ok(())
