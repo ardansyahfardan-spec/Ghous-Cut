@@ -1149,3 +1149,116 @@ body.library-page #root {
   .portrait-primary-tools .tool-btn { flex-basis: 32px !important; width: 32px !important; min-width: 32px !important; }
   .zoom-control { gap: 6px !important; }
 }
+
+
+/* Desktop split-window support: do not apply the phone portrait gate to a
+   mouse/trackpad browser window. Keep all three editor panels visible and
+   compress their columns to the available viewport width. */
+@media (max-width: 900px) and (orientation: portrait) and (pointer: fine) {
+  html, body {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+  .app-shell {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .topbar {
+    height: 50px;
+    min-height: 50px;
+    padding: 0 9px;
+    gap: 7px;
+    flex-wrap: nowrap;
+  }
+  .brand { gap: 6px; font-size: 15px; }
+  .brand-mark { width: 26px; height: 26px; }
+  .brand .version, .project-name { display: none; }
+  .top-actions { gap: 5px; margin-left: auto; }
+  .top-actions .btn { min-height: 30px; padding: 5px 7px; font-size: 9px; gap: 5px; }
+  .top-actions .btn svg { width: 13px; height: 13px; }
+  .workspace {
+    display: grid !important;
+    grid-template-columns: minmax(112px, .72fr) minmax(240px, 1.8fr) minmax(120px, .78fr);
+    gap: 6px;
+    padding: 6px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .media-panel, .inspector-panel { min-width: 0; min-height: 0; max-height: none; }
+  .panel { border-radius: 7px; }
+  .panel-heading, .inspector-panel .panel-heading {
+    height: 43px;
+    min-height: 43px;
+    padding: 0 7px;
+  }
+  .panel-heading h2 { font-size: 11px; }
+  .eyebrow { font-size: 7px; letter-spacing: 1px; }
+  .import-drop { margin: 7px; min-height: 58px; gap: 3px; }
+  .import-drop strong { font-size: 8px; }
+  .import-drop span { font-size: 7px; text-align: center; }
+  .asset-heading { padding: 0 7px 5px; font-size: 7px; }
+  .asset-list { min-width: 0; padding: 0 4px; }
+  .asset-row { gap: 4px; padding: 5px 3px; }
+  .asset-icon { width: 23px; height: 23px; }
+  .asset-meta strong { max-width: 100%; font-size: 8px; }
+  .asset-meta small { font-size: 7px; }
+  .storage-note { padding: 6px; font-size: 7px; }
+  .center-panel { min-width: 0; min-height: 0; gap: 6px; }
+  .preview-panel { min-width: 0; min-height: 110px; }
+  .preview-heading { height: 38px; min-height: 38px; padding: 0 8px; }
+  .preview-stage { min-width: 0; min-height: 0; padding: 5px; }
+  .preview-empty { gap: 5px; text-align: center; }
+  .preview-logo { width: 36px; height: 36px; }
+  .preview-empty strong { font-size: 9px; }
+  .preview-empty span { font-size: 7px; }
+  .transport { height: 34px; min-height: 34px; padding: 0 6px; }
+  .transport-controls { gap: 5px; }
+  .transport-btn { width: 25px; height: 25px; }
+  .play-btn { width: 25px; height: 25px; }
+  .timecode { font-size: 8px; }
+  .timeline-panel { width: 100%; height: clamp(190px, 34vh, 270px); min-height: 170px; }
+  .timeline-toolbar { min-width: 0; height: auto; min-height: 38px; padding: 4px 5px; gap: 4px; }
+  .timeline-title { min-width: 42px; }
+  .timeline-title h2 { font-size: 10px; }
+  .edit-tools { gap: 2px; }
+  .tool-btn { height: 25px; min-height: 25px; padding: 0 4px; font-size: 0; gap: 0; }
+  .tool-btn svg { width: 12px; height: 12px; }
+  .zoom-control { gap: 3px; font-size: 7px; }
+  .zoom-control input { width: 30px; min-width: 22px; }
+  .zoom-control .zoom-step { min-width: 20px; width: 20px; height: 23px; padding: 0 3px; }
+  .zoom-control .zoom-reset { min-width: 32px; height: 23px; padding: 0 3px; }
+  .timeline-ruler-wrap { height: 25px; }
+  .track-label-spacer, .track-label { width: 48px; }
+  .track-label { gap: 3px; padding: 0 3px; }
+  .track-label svg { width: 11px; }
+  .track-label strong { font-size: 6px; }
+  .track-label small, .track-mute { display: none; }
+  .track-row { height: 43px; }
+  .timeline-clip { top: 5px; height: 33px; padding: 0 4px; gap: 3px; }
+  .clip-name { font-size: 7px; }
+  .clip-duration { font-size: 6px; }
+  .playhead { left: 48px; }
+  .timeline-footer { height: 20px; padding: 0 5px; font-size: 6px; }
+  .timeline-footer span:first-child { display: none; }
+  .inspector-content { min-width: 0; padding: 6px; }
+  .selected-file { padding: 2px 0 7px; gap: 4px; }
+  .selected-file-icon { width: 28px; height: 28px; }
+  .selected-file strong { max-width: 100%; font-size: 7px; }
+  .selected-file small { font-size: 6px; }
+  .property-group { padding: 7px 0; }
+  .property-group > label { font-size: 6px; margin-bottom: 4px; }
+  .property-input { height: 23px; padding: 0 5px; }
+  .property-input span, .property-input strong { font-size: 7px; }
+  .wide-action { padding: 5px; font-size: 7px; }
+  .ai-card { margin: 5px; padding: 6px; }
+  .ai-card-title strong { font-size: 7px; }
+  .ai-card p { font-size: 6px; margin: 4px 0; }
+  .toggle-row { font-size: 7px; }
+  .statusbar { height: 22px; min-height: 22px; padding: 0 7px; font-size: 7px; }
+}
