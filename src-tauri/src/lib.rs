@@ -1,4 +1,5 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, io::{copy, Read, Write}, path::PathBuf, process::Command};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
@@ -161,6 +162,129 @@ fn read_project_media(path: String) -> Result<Vec<u8>, String> {
 fn write_project_file(path: String, content: Vec<u8>) -> Result<(), String> {
     if path.trim().is_empty() { return Err("Project export path is required.".into()); }
     fs::write(path, content).map_err(|e| format!("Cannot export project file: {e}"))
+}
+
+#[tauri::command]
+fn export_project_archive(project: Value, output_path: String) -> Result<(), String> {
+    if output_path.trim().is_empty() { return Err("Project export path is required.".into()); }
+    let mut portable_project = project.clone();
+    let clips = portable_project.get_mut("clips")
+        .and_then(Value::as_array_mut)
+        .ok_or("Project clips are missing.")?;
+    let mut media_entries = Vec::<(String, PathBuf)>::new();
+
+    for (index, clip) in clips.iter_mut().enumerate() {
+        let object = clip.as_object_mut().ok_or("Invalid project clip metadata.")?;
+        let kind = object.get("kind").and_then(Value::as_str).unwrap_or("");
+        if ["video", "image", "audio"].contains(&kind) {
+            let source = object.get("path").and_then(Value::as_str).unwrap_or("");
+            if source.trim().is_empty() || !PathBuf::from(source).is_file() {
+                let name = object.get("name").and_then(Value::as_str).unwrap_or("unnamed");
+                return Err(format!("Media \"{name}\" is unavailable. Relink the original file before exporting this project."));
+            }
+            let name = object.get("name").and_then(Value::as_str).unwrap_or("asset");
+            let safe_name: String = name.chars().map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' { ch } else { '-' }
+            }).collect();
+            let archive_name = format!("media/{index:04}-{}", if safe_name.is_empty() { "asset" } else { &safe_name });
+            media_entries.push((archive_name.clone(), PathBuf::from(source)));
+            object.insert("packageMedia".into(), Value::String(archive_name));
+            object.remove("path");
+        }
+        object.insert("src".into(), Value::String(String::new()));
+        object.remove("file");
+    }
+
+    let manifest = serde_json::json!({
+        "format": "ghous-cut-project",
+        "version": 2,
+        "exportedAt": format!("{:?}", std::time::SystemTime::now()),
+        "project": portable_project
+    });
+    let output = fs::File::create(&output_path)
+        .map_err(|e| format!("Cannot create project archive: {e}"))?;
+    let mut zip = ZipWriter::new(output);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated).compression_level(Some(1));
+    zip.start_file("manifest.json", options)
+        .map_err(|e| format!("Cannot write project manifest: {e}"))?;
+    let manifest_bytes = serde_json::to_vec(&manifest).map_err(|e| e.to_string())?;
+    zip.write_all(&manifest_bytes).map_err(|e| format!("Cannot write project manifest: {e}"))?;
+
+    // Stream each original media file directly into the archive. Memory use is
+    // bounded by the copy buffer instead of the size of the entire project.
+    for (archive_name, source_path) in media_entries {
+        let mut source = fs::File::open(&source_path)
+            .map_err(|e| format!("Cannot open media {}: {e}", source_path.display()))?;
+        zip.start_file(archive_name, options)
+            .map_err(|e| format!("Cannot add media to project archive: {e}"))?;
+        copy(&mut source, &mut zip)
+            .map_err(|e| format!("Cannot stream media into project archive: {e}"))?;
+    }
+    zip.finish().map_err(|e| format!("Cannot finalize project archive: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn import_project_archive(app: AppHandle, owner_id: String, archive_path: String) -> Result<Value, String> {
+    if archive_path.trim().is_empty() { return Err("Project archive path is required.".into()); }
+    let file = fs::File::open(&archive_path).map_err(|e| format!("Cannot open project archive: {e}"))?;
+    let mut archive = ZipArchive::new(file).map_err(|e| format!("Invalid Ghous Cut archive: {e}"))?;
+    let mut manifest_text = String::new();
+    archive.by_name("manifest.json")
+        .map_err(|_| "Project manifest was not found in this archive.".to_string())?
+        .read_to_string(&mut manifest_text)
+        .map_err(|e| format!("Cannot read project manifest: {e}"))?;
+    let parsed: Value = serde_json::from_str(&manifest_text)
+        .map_err(|e| format!("Invalid project manifest: {e}"))?;
+    let version = parsed.get("version").and_then(Value::as_u64).unwrap_or(0);
+    if parsed.get("format").and_then(Value::as_str) != Some("ghous-cut-project") || !(1..=2).contains(&version) {
+        return Err("File bukan proyek Ghous Cut yang valid.".into());
+    }
+    let mut project = parsed.get("project").cloned().ok_or("Project data is missing.")?;
+    let project_name = project.get("name").and_then(Value::as_str).ok_or("Project name is missing.")?;
+    if !project.get("clips").and_then(Value::as_array).is_some() {
+        return Err("Project clips are missing.".into());
+    }
+
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let project_id = format!("import{now:x}");
+    let media_directory = project_media_directory(&app, &owner_id, &project_id)?;
+    let clips = project.get_mut("clips").and_then(Value::as_array_mut).unwrap();
+    for (index, clip) in clips.iter_mut().enumerate() {
+        let object = clip.as_object_mut().ok_or("Invalid project clip metadata.")?;
+        let package_media = object.get("packageMedia").and_then(Value::as_str).map(str::to_owned);
+        if let Some(entry_name) = package_media {
+            // Never use archive paths as filesystem paths. Media is written
+            // under generated filenames inside this user's project directory.
+            let original_name = object.get("name").and_then(Value::as_str).unwrap_or("media.bin");
+            let safe_name: String = original_name.chars().map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' { ch } else { '-' }
+            }).collect();
+            let filename = format!("{index:04}-{}", if safe_name.is_empty() { "media.bin" } else { &safe_name });
+            let destination = media_directory.join(&filename);
+            let mut entry = archive.by_name(&entry_name)
+                .map_err(|_| format!("Media entry {entry_name} is missing from the archive."))?;
+            let mut output = fs::File::create(&destination)
+                .map_err(|e| format!("Cannot create local media file: {e}"))?;
+            copy(&mut entry, &mut output)
+                .map_err(|e| format!("Cannot extract project media: {e}"))?;
+            let path = destination.to_str().ok_or("Local media path is not valid UTF-8.")?;
+            object.insert("path".into(), Value::String(path.to_owned()));
+            object.insert("mediaMissing".into(), Value::Bool(false));
+            object.remove("packageMedia");
+        } else if ["video", "image", "audio"].contains(&object.get("kind").and_then(Value::as_str).unwrap_or("")) {
+            object.insert("mediaMissing".into(), Value::Bool(true));
+        }
+        object.insert("src".into(), Value::String(String::new()));
+        object.remove("file");
+    }
+    project["id"] = Value::String(project_id);
+    project["createdAt"] = Value::from(now as u64 / 1_000_000);
+    project["updatedAt"] = Value::from(now as u64 / 1_000_000);
+    let _ = project_name;
+    save_project(app, project.clone(), owner_id)?;
+    Ok(project)
 }
 
 #[tauri::command]
@@ -376,7 +500,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, project_media_exists, read_project_media, write_project_file
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, save_project_media, project_media_exists, read_project_media, write_project_file, export_project_archive, import_project_archive
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
