@@ -16,6 +16,7 @@ jobs:
     env:
       WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
     steps:
       - uses: actions/checkout@v7
 
@@ -32,6 +33,13 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm install
+
+      - name: Validate Google Desktop OAuth configuration
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_OAUTH_CLIENT_SECRET)) {
+            throw "Missing repository Actions secret GOOGLE_OAUTH_CLIENT_SECRET. Add the secret from the Ghous Cut Windows Desktop OAuth client before building."
+          }
 
       - name: Prepare Windows code-signing certificate
         if: env.WINDOWS_CERTIFICATE_BASE64 != ''
