@@ -13,26 +13,125 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
+
       - name: Generate Windows application icon
         shell: pwsh
         run: ./.github/scripts/create-windows-icon.ps1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           package-manager-cache: false
+
       - uses: dtolnay/rust-toolchain@stable
+
       - name: Install frontend dependencies
         run: npm install
-      - name: Build Ghous Cut installers
+
+      - name: Prepare Windows code-signing certificate
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "WINDOWS_CERTIFICATE_PASSWORD is required when a signing certificate is configured."
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP "ghous-cut-signing.pfx"
+          $pfxBytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64)
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+          $securePassword = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation "Cert:\CurrentUser\My" -Password $securePassword
+          Remove-Item $pfxPath -Force
+
+          if (-not $cert -or -not $cert.HasPrivateKey) {
+            throw "The imported certificate is missing or has no private key."
+          }
+
+          $hasCodeSigningEku = $false
+          foreach ($extension in $cert.Extensions) {
+            if ($extension -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]) {
+              foreach ($oid in $extension.EnhancedKeyUsages) {
+                if ($oid.Value -eq "1.3.6.1.5.5.7.3.3") { $hasCodeSigningEku = $true }
+              }
+            }
+          }
+          if (-not $hasCodeSigningEku) {
+            throw "The certificate does not contain the Code Signing EKU."
+          }
+
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $cert.Thumbprint
+                digestAlgorithm = "sha256"
+                timestampUrl = "https://timestamp.digicert.com"
+              }
+            }
+          } | ConvertTo-Json -Depth 8
+
+          $configPath = Join-Path $env:GITHUB_WORKSPACE "src-tauri\tauri.windows-signing.conf.json"
+          Set-Content -Path $configPath -Value $config -Encoding utf8
+          "TAURI_SIGNING_CONFIG=$configPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Imported code-signing certificate $($cert.Thumbprint)."
+
+      - name: Build signed Ghous Cut installers
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
+        run: npm run tauri build -- --config src-tauri/tauri.windows-signing.conf.json
+
+      - name: Build unsigned Ghous Cut installers
+        if: env.WINDOWS_CERTIFICATE_BASE64 == ''
         run: npm run tauri build
-      - name: Upload Windows installers
+
+      - name: Verify installer signatures and generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installerFiles = @(
+            Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter "*.exe" -File
+            Get-ChildItem "src-tauri/target/release/bundle/msi" -Filter "*.msi" -File
+          )
+          if ($installerFiles.Count -lt 2) {
+            throw "Expected both NSIS EXE and MSI installers."
+          }
+
+          New-Item -ItemType Directory -Force "installer-verification" | Out-Null
+          $checksumLines = @()
+          foreach ($file in $installerFiles) {
+            $signature = Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($env:WINDOWS_CERTIFICATE_BASE64 -ne '') {
+              if ($signature.Status -ne "Valid") {
+                throw "Code signature verification failed for $($file.Name): $($signature.Status)"
+              }
+              if ($signature.SignerCertificate -eq $null) {
+                throw "No signer certificate found for $($file.Name)."
+              }
+              Write-Host "$($file.Name): signed by $($signature.SignerCertificate.Subject)"
+            } else {
+              if ($signature.Status -eq "Valid") {
+                Write-Host "$($file.Name): valid signature detected."
+              } else {
+                Write-Warning "$($file.Name): unsigned build ($($signature.Status)); do not distribute as a trusted signed installer."
+              }
+            }
+
+            $hash = Get-FileHash -Algorithm SHA256 -Path $file.FullName
+            $checksumLines += "$($hash.Hash.ToLower())  $($file.Name)"
+            Copy-Item $file.FullName "installer-verification/"
+          }
+
+          $checksumLines | Set-Content "installer-verification/SHA256SUMS.txt" -Encoding ascii
+
+      - name: Upload verified installer package
         uses: actions/upload-artifact@v7
         with:
-          name: ghous-cut-windows-installers
-          path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
+          name: ghous-cut-windows-installers-${{ env.WINDOWS_CERTIFICATE_BASE64 != '' && 'signed' || 'unsigned' }}
+          path: installer-verification/*
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
