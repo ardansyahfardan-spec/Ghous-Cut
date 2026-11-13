@@ -1,6 +1,6 @@
 [package]
 name = "ghous-cut"
-version = "0.1.0"
+version = "0.1.1"
 description = "Ghous Cut desktop video editor"
 authors = ["Ghous Cut"]
 edition = "2021"
