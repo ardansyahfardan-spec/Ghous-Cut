@@ -97,10 +97,19 @@ fn google_desktop_oauth() -> Result<GoogleOAuthTokens, String> {
     let _ = stream.write_all(page);
     drop(stream);
 
+    // Google's Desktop OAuth token endpoint currently rejects a PKCE exchange
+    // without client_secret, despite the parameter being documented as optional.
+    // Desktop client secrets are public-client credentials and are not confidential;
+    // PKCE remains the protection against authorization-code interception.
+    let client_secret = option_env!("GOOGLE_OAUTH_CLIENT_SECRET")
+        .filter(|value| !value.trim().is_empty())
+        .ok_or("Google Desktop OAuth is not configured in this build. Add GOOGLE_OAUTH_CLIENT_SECRET to GitHub Actions secrets and rebuild.")?;
+
     let response = reqwest::blocking::Client::new()
         .post("https://oauth2.googleapis.com/token")
         .form(&[
             ("client_id", CLIENT_ID),
+            ("client_secret", client_secret),
             ("code", code.as_str()),
             ("code_verifier", verifier.as_str()),
             ("grant_type", "authorization_code"),
