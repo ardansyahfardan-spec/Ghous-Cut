@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signOut, type User } from "firebase/auth";
+import { invoke } from "@tauri-apps/api/core";
 import { firebaseAuth, googleProvider } from "./firebase";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -812,13 +813,15 @@ export default function App() {
   useEffect(() => onAuthStateChanged(firebaseAuth, setAuthUser), []);
 
   const handleGoogleSignIn = async () => {
-    if (isDesktopApp) {
-      setStorageError("Login Google untuk aplikasi Windows sedang disiapkan melalui OAuth Desktop yang aman. Proyek dan media tetap tersimpan lokal.");
-      return;
-    }
     setAuthBusy(true);
     try {
-      await signInWithPopup(firebaseAuth, googleProvider);
+      if (isDesktopApp) {
+        const tokens = await invoke<{ id_token: string; access_token: string }>("google_desktop_oauth");
+        const credential = GoogleAuthProvider.credential(tokens.id_token, tokens.access_token);
+        await signInWithCredential(firebaseAuth, credential);
+      } else {
+        await signInWithPopup(firebaseAuth, googleProvider);
+      }
       setStorageError("");
     } catch (error) {
       setStorageError(`Login Google gagal: ${error instanceof Error ? error.message : String(error)}`);
@@ -988,7 +991,8 @@ export default function App() {
           <span className="account-email">{authUser.displayName || authUser.email || "Google account"}</span>
           <button className="account-action" onClick={() => void handleSignOut()} disabled={authBusy}>Keluar</button>
         </> : isDesktopApp ? <>
-          <span className="library-online"/><span>Local workspace · Login Windows segera</span>
+          <span className="library-online"/><span>Local workspace</span>
+          <button className="account-action" onClick={() => void handleGoogleSignIn()} disabled={authBusy}>{authBusy ? "Menghubungkan…" : "Masuk dengan Google"}</button>
         </> : <>
           <span className="library-online"/><span>Local workspace</span>
           <button className="account-action" onClick={() => void handleGoogleSignIn()} disabled={authBusy}>{authBusy ? "Menghubungkan…" : "Masuk dengan Google"}</button>
