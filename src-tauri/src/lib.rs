@@ -23,7 +23,6 @@ fn google_desktop_oauth() -> Result<GoogleOAuthTokens, String> {
     use url::Url;
 
     const CLIENT_ID: &str = "474433462871-qcrd2rm7oak7l0qs0gtjepet6ga0m2n2.apps.googleusercontent.com";
-    const CLIENT_SECRET: Option<&str> = option_env!("GOOGLE_OAUTH_CLIENT_SECRET");
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|e| format!("Cannot start secure sign-in callback: {e}"))?;
@@ -98,12 +97,10 @@ fn google_desktop_oauth() -> Result<GoogleOAuthTokens, String> {
     let _ = stream.write_all(page);
     drop(stream);
 
-    let client_secret = CLIENT_SECRET.ok_or("Google Desktop OAuth client secret is not configured in the Windows build.")?;
     let response = reqwest::blocking::Client::new()
         .post("https://oauth2.googleapis.com/token")
         .form(&[
             ("client_id", CLIENT_ID),
-            ("client_secret", client_secret),
             ("code", code.as_str()),
             ("code_verifier", verifier.as_str()),
             ("grant_type", "authorization_code"),
