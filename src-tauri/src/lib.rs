@@ -430,6 +430,7 @@ fn export_timeline(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             export_clip, export_timeline, list_projects, load_project, save_project, delete_project, write_project_file, google_desktop_oauth
         ])
