@@ -93,7 +93,7 @@ fn google_desktop_oauth() -> Result<GoogleOAuthTokens, String> {
     }
     let code = params.get("code").ok_or("Google did not return an authorization code.")?;
 
-    let page = b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\nContent-Length: 111\r\n\r\n<!doctype html><title>Ghous Cut</title><p>Google sign-in complete. You can return to Ghous Cut.</p>";
+    let page = b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<!doctype html><title>Ghous Cut</title><p>Google sign-in complete. You can return to Ghous Cut.</p>";
     let _ = stream.write_all(page);
     drop(stream);
 
