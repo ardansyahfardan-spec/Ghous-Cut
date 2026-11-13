@@ -1025,6 +1025,7 @@ export default function App() {
     <header className="library-topbar">
       <div className="library-brand"><span className="library-mark"><BrandLogo size={32}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
       <div className="library-account">
+        {isDesktopApp && <button className="account-action" onClick={() => void handleCheckUpdates()} disabled={updateBusy}>{updateBusy ? "Memeriksa…" : "Periksa pembaruan"}</button>}
         {authUser ? <>
           {authUser.photoURL && <img className="account-avatar" src={authUser.photoURL} alt="" referrerPolicy="no-referrer"/>}
           <span className="account-email">{authUser.displayName || authUser.email || "Google account"}</span>
@@ -1038,7 +1039,8 @@ export default function App() {
         </>}
       </div>
     </header>
-    {updateNotice && <div className="storage-warning update-notice" role="status">{updateNotice}</div>}\n    <section className="library-content">
+    {updateNotice && <div className="storage-warning update-notice" role="status">{updateNotice}</div>}
+    <section className="library-content">
       <div className="library-welcome">
         <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut menyimpan susunan proyek; media sumber tetap di perangkatmu.</p></div>
         <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
