@@ -25,6 +25,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
       - name: Build Ghous Cut installers
+        env:
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
         run: npm run tauri build
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
