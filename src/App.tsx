@@ -4,6 +4,7 @@ import { firebaseAuth, googleProvider } from "./firebase";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
@@ -831,8 +832,22 @@ export default function App() {
         return;
       }
       setUpdateNotice("Mengunduh dan memasang pembaruan…");
-      await update.downloadAndInstall();
-      setUpdateNotice("Pembaruan selesai dipasang.");
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall(event => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+          setUpdateNotice(total > 0 ? "Mengunduh pembaruan… 0%" : "Mengunduh pembaruan…");
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          const percent = total > 0 ? Math.min(100, Math.round(downloaded / total * 100)) : 0;
+          setUpdateNotice(total > 0 ? `Mengunduh pembaruan… ${percent}%` : "Mengunduh pembaruan…");
+        } else if (event.event === "Finished") {
+          setUpdateNotice("Unduhan selesai. Memasang pembaruan…");
+        }
+      });
+      setUpdateNotice("Pembaruan terpasang. Membuka ulang Ghous Cut…");
+      await relaunch();
     } catch (error) {
       setUpdateNotice(`Pembaruan gagal: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
