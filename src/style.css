@@ -1157,3 +1157,18 @@ body.library-page #root {
 .account-action:hover{background:#30213d;border-color:#a47bc2}
 .account-action:disabled{opacity:.6;cursor:wait}
 @media(max-width:650px){.library-account{max-width:58%;gap:5px}.account-email{max-width:90px;font-size:9px}.account-action{min-height:27px;padding:0 7px;font-size:9px}}
+
+
+/* Canvas aspect ratio selector in the preview header. */
+.preview-meta select {
+  appearance: none;
+  min-width: 64px;
+  padding: 4px 20px 4px 7px;
+  border: 1px solid var(--gc-border, #303342);
+  border-radius: 5px;
+  background: var(--gc-surface-raised, #191c26);
+  color: var(--gc-text, #c4c6d0);
+  font: 9px 'DM Mono', monospace;
+  cursor: pointer;
+}
+.preview-meta select:focus-visible { outline: 2px solid var(--gc-cream, #d8cfb5); outline-offset: 2px; }
