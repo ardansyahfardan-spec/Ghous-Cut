@@ -1,0 +1,110 @@
+name: Publish Ghous Cut updater release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    env:
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Generate Windows application icon
+        shell: pwsh
+        run: ./.github/scripts/create-windows-icon.ps1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Validate release signing configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ([string]::IsNullOrWhiteSpace($env:GOOGLE_OAUTH_CLIENT_SECRET)) {
+            throw "Missing repository secret GOOGLE_OAUTH_CLIENT_SECRET."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            throw "Missing repository secret TAURI_SIGNING_PRIVATE_KEY. Updater releases must be signed."
+          }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) {
+            throw "Missing repository variable TAURI_UPDATER_PUBLIC_KEY."
+          }
+
+      - name: Prepare signed updater configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $config.bundle.createUpdaterArtifacts = $true
+          $config.plugins.updater.pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
+          $config | ConvertTo-Json -Depth 100 | Set-Content "src-tauri/tauri.release.conf.json" -Encoding utf8
+
+      - name: Build signed Ghous Cut installers and updater bundles
+        run: npm run tauri build -- --config src-tauri/tauri.release.conf.json
+
+      - name: Prepare updater manifest and release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $version = [string]$config.version
+          $tag = "v$version"
+          if ("$env:GITHUB_REF_NAME" -ne $tag) {
+            throw "Release tag $env:GITHUB_REF_NAME must match app version $tag in src-tauri/tauri.conf.json."
+          }
+
+          $nsisDir = "src-tauri/target/release/bundle/nsis"
+          $msiDir = "src-tauri/target/release/bundle/msi"
+          $updateZip = Get-ChildItem $nsisDir -Filter "*.nsis.zip" -File | Select-Object -First 1
+          if (-not $updateZip) { throw "Tauri did not generate the NSIS updater .zip bundle." }
+          $signatureFile = Get-Item "$($updateZip.FullName).sig" -ErrorAction SilentlyContinue
+          if (-not $signatureFile) { throw "Updater signature file is missing for $($updateZip.Name)." }
+          $signature = (Get-Content $signatureFile.FullName -Raw).Trim()
+          if ([string]::IsNullOrWhiteSpace($signature)) { throw "Updater signature is empty." }
+
+          $assetDir = "release-assets"
+          New-Item -ItemType Directory -Force $assetDir | Out-Null
+          Copy-Item $updateZip.FullName $assetDir
+          Copy-Item $signatureFile.FullName $assetDir
+          Get-ChildItem $nsisDir -Filter "*.exe" -File | Copy-Item -Destination $assetDir
+          Get-ChildItem $msiDir -Filter "*.msi" -File | Copy-Item -Destination $assetDir
+
+          $manifest = @{
+            version = $version
+            notes = "Ghous Cut $version"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = "https://github.com/${{ github.repository }}/releases/download/$tag/$($updateZip.Name)"
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content "$assetDir/latest.json" -Encoding utf8
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Ghous Cut ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-assets/*
+          fail_on_unmatched_files: true
