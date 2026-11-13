@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { firebaseAuth, googleProvider } from "./firebase";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
@@ -803,6 +805,34 @@ export default function App() {
   const [draftName, setDraftName] = useState("");
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const isDesktopApp = "__TAURI_INTERNALS__" in window;
+
+  useEffect(() => onAuthStateChanged(firebaseAuth, setAuthUser), []);
+
+  const handleGoogleSignIn = async () => {
+    if (isDesktopApp) {
+      setStorageError("Login Google untuk aplikasi Windows sedang disiapkan melalui OAuth Desktop yang aman. Proyek dan media tetap tersimpan lokal.");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      await signInWithPopup(firebaseAuth, googleProvider);
+      setStorageError("");
+    } catch (error) {
+      setStorageError(`Login Google gagal: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setAuthBusy(true);
+    try { await signOut(firebaseAuth); }
+    catch (error) { setStorageError(`Logout gagal: ${String(error)}`); }
+    finally { setAuthBusy(false); }
+  };
   const projectFileInputRef = useRef<HTMLInputElement>(null);
 
   // The project library uses normal document scrolling. The editor keeps its own
@@ -952,7 +982,18 @@ export default function App() {
   return <main className="project-library">
     <header className="library-topbar">
       <div className="library-brand"><span className="library-mark"><BrandLogo size={32}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
-      <div className="library-account"><span className="library-online"/><span>Local workspace</span></div>
+      <div className="library-account">
+        {authUser ? <>
+          {authUser.photoURL && <img className="account-avatar" src={authUser.photoURL} alt="" referrerPolicy="no-referrer"/>}
+          <span className="account-email">{authUser.displayName || authUser.email || "Google account"}</span>
+          <button className="account-action" onClick={() => void handleSignOut()} disabled={authBusy}>Keluar</button>
+        </> : isDesktopApp ? <>
+          <span className="library-online"/><span>Local workspace · Login Windows segera</span>
+        </> : <>
+          <span className="library-online"/><span>Local workspace</span>
+          <button className="account-action" onClick={() => void handleGoogleSignIn()} disabled={authBusy}>{authBusy ? "Menghubungkan…" : "Masuk dengan Google"}</button>
+        </>}
+      </div>
     </header>
     <section className="library-content">
       <div className="library-welcome">
