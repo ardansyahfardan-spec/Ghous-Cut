@@ -882,14 +882,18 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    const timer = window.setTimeout(async () => {
-      try {
-        const items = await listProjects();
-        if (alive) setProjects(items);
-      } catch {
-        if (alive) setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
-      }
+    const timer = window.setTimeout(() => {
+      // Show the project library (and Google sign-in) independently of local
+      // project storage. A slow or blocked listProjects() must never hide login.
       if (alive) setScreen("library");
+      void (async () => {
+        try {
+          const items = await listProjects();
+          if (alive) setProjects(items);
+        } catch {
+          if (alive) setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
+        }
+      })();
     }, 1250);
     return () => { alive = false; window.clearTimeout(timer); };
   }, []);
