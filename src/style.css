@@ -1149,3 +1149,11 @@ body.library-page #root {
   .portrait-primary-tools .tool-btn { flex-basis: 32px !important; width: 32px !important; min-width: 32px !important; }
   .zoom-control { gap: 6px !important; }
 }
+
+.library-account{min-width:0;max-width:52%;flex-wrap:wrap;justify-content:flex-end}
+.account-avatar{width:26px;height:26px;border-radius:50%;object-fit:cover;border:1px solid #604477}
+.account-email{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c8bfd2}
+.account-action{min-height:30px;padding:0 10px;border:1px solid #57406b;border-radius:7px;background:#211a2a;color:#e4cff5;font:10px 'DM Sans';font-weight:700}
+.account-action:hover{background:#30213d;border-color:#a47bc2}
+.account-action:disabled{opacity:.6;cursor:wait}
+@media(max-width:650px){.library-account{max-width:58%;gap:5px}.account-email{max-width:90px;font-size:9px}.account-action{min-height:27px;padding:0 7px;font-size:9px}}
