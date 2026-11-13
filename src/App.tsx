@@ -3,6 +3,7 @@ import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWit
 import { firebaseAuth, googleProvider } from "./firebase";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
 import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
@@ -807,9 +808,37 @@ export default function App() {
   const [storageError, setStorageError] = useState("");
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState("");
   const isDesktopApp = "__TAURI_INTERNALS__" in window;
 
   useEffect(() => onAuthStateChanged(firebaseAuth, setAuthUser), []);
+
+  const handleCheckUpdates = async () => {
+    if (!isDesktopApp || updateBusy) return;
+    setUpdateBusy(true);
+    setUpdateNotice("Memeriksa pembaruan…");
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateNotice("Ghous Cut sudah menggunakan versi terbaru.");
+        return;
+      }
+      const notes = update.body?.trim() || "Pembaruan Ghous Cut tersedia.";
+      const accepted = window.confirm(`Ghous Cut versi ${update.version} tersedia.\\n\\n${notes}\\n\\nUnduh dan pasang sekarang? Proyek serta media lokal tidak akan dihapus.`);
+      if (!accepted) {
+        setUpdateNotice(`Pembaruan ${update.version} tersedia.`);
+        return;
+      }
+      setUpdateNotice("Mengunduh dan memasang pembaruan…");
+      await update.downloadAndInstall();
+      setUpdateNotice("Pembaruan selesai dipasang.");
+    } catch (error) {
+      setUpdateNotice(`Pembaruan gagal: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     setAuthBusy(true);
@@ -1009,7 +1038,7 @@ export default function App() {
         </>}
       </div>
     </header>
-    <section className="library-content">
+    {updateNotice && <div className="storage-warning update-notice" role="status">{updateNotice}</div>}\n    <section className="library-content">
       <div className="library-welcome">
         <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut menyimpan susunan proyek; media sumber tetap di perangkatmu.</p></div>
         <div className="library-welcome-actions"><button className="btn ghost" onClick={() => projectFileInputRef.current?.click()}><FolderOpen size={16}/> Buka .ghcut</button><button className="new-project-button" onClick={() => setCreating(true)}><Plus size={18}/> Proyek Baru</button></div>
