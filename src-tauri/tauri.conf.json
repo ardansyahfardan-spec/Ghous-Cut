@@ -40,6 +40,15 @@
     "longDescription": "An open-source video editing application built with Tauri, React and FFmpeg.",
     "icon": [
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "UPDATER_PUBLIC_KEY_WILL_BE_INJECTED_BY_CI",
+      "endpoints": [
+        "https://github.com/ardansyahfardan-spec/Ghous-Cut/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
