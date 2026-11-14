@@ -43,6 +43,9 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
             throw "Missing repository secret TAURI_SIGNING_PRIVATE_KEY. Updater releases must be signed."
           }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw "Missing repository secret TAURI_SIGNING_PRIVATE_KEY_PASSWORD. The updater signing key is password-protected."
+          }
           if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) {
             throw "Missing repository variable TAURI_UPDATER_PUBLIC_KEY."
           }
