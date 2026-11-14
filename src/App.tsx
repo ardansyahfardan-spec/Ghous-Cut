@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signOut, type User } from "firebase/auth";
+import { firebaseAuth, googleProvider } from "./firebase";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { browserPersistenceAvailable, createProject, deleteProject, exportProjectFile, importProjectFile, listProjects, loadProject, saveProject, type StoredProject } from "./projectStorage";
 import {
   AudioLines, Clapperboard, FilePlus2, Film, FolderOpen, Image as ImageIcon,
@@ -34,7 +38,7 @@ const kindFrom = (path: string): MediaKind => {
 };
 const basename = (p: string) => p.split(/[\\/]/).pop() || p;
 
-function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExportProject }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void> }) {
+function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExportProject, onAspectRatioChange }: { projectId: string; projectName: string; aspectRatio: ProjectAspectRatio; onBack: () => void; onExportProject: (project: StoredProject<Clip>) => Promise<void>; onAspectRatioChange: (ratio: ProjectAspectRatio) => Promise<void> }) {
   const [clips, setClips] = useState<Clip[]>([]);
   const undoStack = useRef<Clip[][]>([]);
   const redoStack = useRef<Clip[][]>([]);
@@ -526,7 +530,7 @@ function EditorWorkspace({ projectId, projectName, aspectRatio, onBack, onExport
 
       <section className="center-panel">
         <div className="preview-panel panel">
-          <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><span>{aspectRatio}</span><span>FIT</span></div></div>
+          <div className="panel-heading preview-heading"><div><span className="eyebrow">CANVAS</span><h2>Preview</h2></div><div className="preview-meta"><select aria-label="Rasio kanvas" value={aspectRatio} onChange={e => { const next = e.target.value as ProjectAspectRatio; void onAspectRatioChange(next).then(() => setNotice(`Canvas ratio changed to ${next}.`)).catch(() => setNotice("Gagal menyimpan rasio kanvas.")); }}><option value="16:9">16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option></select><span>FIT</span></div></div>
           <div className="preview-stage">
             {!currentPreview && <div className="preview-empty"><div className="preview-logo"><Clapperboard size={30}/></div><strong>Your story starts here</strong><span>Import a clip and select it in the timeline</span></div>}
             {clips.filter(clip => clip.kind === "video" || clip.kind === "image").map(clip => {
@@ -803,6 +807,87 @@ export default function App() {
   const [draftName, setDraftName] = useState("");
   const [draftAspectRatio, setDraftAspectRatio] = useState<ProjectAspectRatio>("16:9");
   const [storageError, setStorageError] = useState("");
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState("");
+  const isDesktopApp = "__TAURI_INTERNALS__" in window;
+
+  useEffect(() => onAuthStateChanged(firebaseAuth, setAuthUser), []);
+
+  const handleCheckUpdates = async () => {
+    if (!isDesktopApp || updateBusy) return;
+    setUpdateBusy(true);
+    setUpdateNotice("Memeriksa pembaruan…");
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateNotice("Ghous Cut sudah menggunakan versi terbaru.");
+        return;
+      }
+      const notes = update.body?.trim() || "Pembaruan Ghous Cut tersedia.";
+      const accepted = window.confirm(`Ghous Cut versi ${update.version} tersedia.\\n\\n${notes}\\n\\nUnduh dan pasang sekarang? Proyek serta media lokal tidak akan dihapus.`);
+      if (!accepted) {
+        setUpdateNotice(`Pembaruan ${update.version} tersedia.`);
+        return;
+      }
+      setUpdateNotice("Mengunduh dan memasang pembaruan…");
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall(event => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+          setUpdateNotice(total > 0 ? "Mengunduh pembaruan… 0%" : "Mengunduh pembaruan…");
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          const percent = total > 0 ? Math.min(100, Math.round(downloaded / total * 100)) : 0;
+          setUpdateNotice(total > 0 ? `Mengunduh pembaruan… ${percent}%` : "Mengunduh pembaruan…");
+        } else if (event.event === "Finished") {
+          setUpdateNotice("Unduhan selesai. Memasang pembaruan…");
+        }
+      });
+      setUpdateNotice("Pembaruan terpasang. Membuka ulang Ghous Cut…");
+      await relaunch();
+    } catch (error) {
+      setUpdateNotice(`Pembaruan gagal: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  // Automatically check for desktop updates after startup, once the project library is ready.
+  useEffect(() => {
+    if (!isDesktopApp) return;
+    const timer = window.setTimeout(() => {
+      void handleCheckUpdates();
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setAuthBusy(true);
+    try {
+      if (isDesktopApp) {
+        const tokens = await invoke<{ id_token: string; access_token: string }>("google_desktop_oauth");
+        const credential = GoogleAuthProvider.credential(tokens.id_token, tokens.access_token);
+        await signInWithCredential(firebaseAuth, credential);
+      } else {
+        await signInWithPopup(firebaseAuth, googleProvider);
+      }
+      setStorageError("");
+    } catch (error) {
+      setStorageError(`Login Google gagal: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setAuthBusy(true);
+    try { await signOut(firebaseAuth); }
+    catch (error) { setStorageError(`Logout gagal: ${String(error)}`); }
+    finally { setAuthBusy(false); }
+  };
   const projectFileInputRef = useRef<HTMLInputElement>(null);
 
   // The project library uses normal document scrolling. The editor keeps its own
@@ -850,14 +935,18 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    const timer = window.setTimeout(async () => {
-      try {
-        const items = await listProjects();
-        if (alive) setProjects(items);
-      } catch {
-        if (alive) setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
-      }
+    const timer = window.setTimeout(() => {
+      // Show the project library (and Google sign-in) independently of local
+      // project storage. A slow or blocked listProjects() must never hide login.
       if (alive) setScreen("library");
+      void (async () => {
+        try {
+          const items = await listProjects();
+          if (alive) setProjects(items);
+        } catch {
+          if (alive) setStorageError("Penyimpanan proyek tidak dapat dibuka di browser ini.");
+        }
+      })();
     }, 1250);
     return () => { alive = false; window.clearTimeout(timer); };
   }, []);
@@ -947,13 +1036,34 @@ export default function App() {
     aspectRatio={activeProject.aspectRatio || "16:9"}
     onBack={async () => { await refreshProjects(); setScreen("library"); }}
     onExportProject={exportProject}
+    onAspectRatioChange={async (nextRatio) => {
+      const updated = { ...activeProject, aspectRatio: nextRatio, updatedAt: Date.now() };
+      await createProject(updated);
+      setActiveProject(updated);
+      setProjects(old => old.map(item => item.id === updated.id ? updated : item));
+      setStorageError("");
+    }}
   />;
 
   return <main className="project-library">
     <header className="library-topbar">
       <div className="library-brand"><span className="library-mark"><BrandLogo size={32}/></span><span>GHOUS <b>CUT</b></span><small>VIDEO EDITOR</small></div>
-      <div className="library-account"><span className="library-online"/><span>Local workspace</span></div>
+      <div className="library-account">
+        {isDesktopApp && <button className="account-action" onClick={() => void handleCheckUpdates()} disabled={updateBusy}>{updateBusy ? "Memeriksa…" : "Periksa pembaruan"}</button>}
+        {authUser ? <>
+          {authUser.photoURL && <img className="account-avatar" src={authUser.photoURL} alt="" referrerPolicy="no-referrer"/>}
+          <span className="account-email">{authUser.displayName || authUser.email || "Google account"}</span>
+          <button className="account-action" onClick={() => void handleSignOut()} disabled={authBusy}>Keluar</button>
+        </> : isDesktopApp ? <>
+          <span className="library-online"/><span>Local workspace</span>
+          <button className="account-action" onClick={() => void handleGoogleSignIn()} disabled={authBusy}>{authBusy ? "Menghubungkan…" : "Masuk dengan Google"}</button>
+        </> : <>
+          <span className="library-online"/><span>Local workspace</span>
+          <button className="account-action" onClick={() => void handleGoogleSignIn()} disabled={authBusy}>{authBusy ? "Menghubungkan…" : "Masuk dengan Google"}</button>
+        </>}
+      </div>
     </header>
+    {updateNotice && <div className="storage-warning update-notice" role="status">{updateNotice}</div>}
     <section className="library-content">
       <div className="library-welcome">
         <div><span className="library-kicker">YOUR CREATIVE SPACE</span><h1>Proyek Saya</h1><p>Lanjutkan karya terakhir atau mulai video baru. File .ghcut menyimpan susunan proyek; media sumber tetap di perangkatmu.</p></div>

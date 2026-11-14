@@ -2,6 +2,137 @@ use std::{fs, path::PathBuf, process::Command};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
+
+#[derive(serde::Serialize)]
+struct GoogleOAuthTokens {
+    id_token: String,
+    access_token: String,
+}
+
+#[tauri::command]
+fn google_desktop_oauth() -> Result<GoogleOAuthTokens, String> {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    use rand::RngCore;
+    use sha2::{Digest, Sha256};
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+        time::{Duration, Instant},
+    };
+    use url::Url;
+
+    const CLIENT_ID: &str = "474433462871-qcrd2rm7oak7l0qs0gtjepet6ga0m2n2.apps.googleusercontent.com";
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|e| format!("Cannot start secure sign-in callback: {e}"))?;
+    listener.set_nonblocking(true)
+        .map_err(|e| format!("Cannot configure sign-in callback: {e}"))?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let redirect_uri = format!("http://127.0.0.1:{port}/");
+
+    let mut verifier_bytes = [0u8; 32];
+    let mut state_bytes = [0u8; 24];
+    rand::rngs::OsRng.fill_bytes(&mut verifier_bytes);
+    rand::rngs::OsRng.fill_bytes(&mut state_bytes);
+    let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
+    let state = URL_SAFE_NO_PAD.encode(state_bytes);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+
+    let mut auth_url = Url::parse("https://accounts.google.com/o/oauth2/v2/auth")
+        .map_err(|e| e.to_string())?;
+    auth_url.query_pairs_mut()
+        .append_pair("client_id", CLIENT_ID)
+        .append_pair("redirect_uri", &redirect_uri)
+        .append_pair("response_type", "code")
+        .append_pair("scope", "openid email profile")
+        .append_pair("code_challenge", &challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("state", &state)
+        .append_pair("prompt", "select_account");
+
+    open::that(auth_url.as_str())
+        .map_err(|e| format!("Cannot open your browser for Google sign-in: {e}"))?;
+
+    let deadline = Instant::now() + Duration::from_secs(180);
+    let (mut stream, request_target) = loop {
+        if Instant::now() >= deadline {
+            return Err("Google sign-in timed out. Please try again.".into());
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+                let mut request = [0u8; 8192];
+                let size = stream.read(&mut request)
+                    .map_err(|e| format!("Could not read Google sign-in response: {e}"))?;
+                let request_text = String::from_utf8_lossy(&request[..size]);
+                let target = request_text.lines().next()
+                    .and_then(|line| line.split_whitespace().nth(1))
+                    .unwrap_or("/")
+                    .to_string();
+                break (stream, target);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(120));
+            }
+            Err(error) => return Err(format!("Google sign-in callback failed: {error}")),
+        }
+    };
+
+    let callback = Url::parse(&format!("http://127.0.0.1:{port}{request_target}"))
+        .map_err(|e| format!("Invalid Google sign-in callback: {e}"))?;
+    let params = callback.query_pairs().into_owned().collect::<std::collections::HashMap<_, _>>();
+    let returned_state = params.get("state").ok_or("Google did not return a sign-in state.")?;
+    if returned_state != &state {
+        let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\nSign-in state mismatch. You may close this window.");
+        return Err("Google sign-in state verification failed.".into());
+    }
+    if let Some(error) = params.get("error") {
+        let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\nGoogle sign-in was cancelled. You may close this window.");
+        return Err(format!("Google sign-in was not completed: {error}"));
+    }
+    let code = params.get("code").ok_or("Google did not return an authorization code.")?;
+
+    let page = b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<!doctype html><title>Ghous Cut</title><p>Google sign-in complete. You can return to Ghous Cut.</p>";
+    let _ = stream.write_all(page);
+    drop(stream);
+
+    // Google's Desktop OAuth token endpoint currently rejects a PKCE exchange
+    // without client_secret, despite the parameter being documented as optional.
+    // Desktop client secrets are public-client credentials and are not confidential;
+    // PKCE remains the protection against authorization-code interception.
+    let client_secret = option_env!("GOOGLE_OAUTH_CLIENT_SECRET")
+        .filter(|value| !value.trim().is_empty())
+        .ok_or("Google Desktop OAuth is not configured in this build. Add GOOGLE_OAUTH_CLIENT_SECRET to GitHub Actions secrets and rebuild.")?;
+
+    let response = reqwest::blocking::Client::new()
+        .post("https://oauth2.googleapis.com/token")
+        .form(&[
+            ("client_id", CLIENT_ID),
+            ("client_secret", client_secret),
+            ("code", code.as_str()),
+            ("code_verifier", verifier.as_str()),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", redirect_uri.as_str()),
+        ])
+        .send()
+        .map_err(|e| format!("Could not exchange Google sign-in code: {e}"))?;
+    let status = response.status();
+    let payload: serde_json::Value = response.json()
+        .map_err(|e| format!("Invalid Google token response: {e}"))?;
+    if !status.is_success() {
+        let detail = payload.get("error_description").and_then(|v| v.as_str())
+            .or_else(|| payload.get("error").and_then(|v| v.as_str()))
+            .unwrap_or("Unknown token exchange error");
+        return Err(format!("Google token exchange failed: {detail}"));
+    }
+    let id_token = payload.get("id_token").and_then(|v| v.as_str())
+        .ok_or("Google did not return an ID token.")?.to_string();
+    let access_token = payload.get("access_token").and_then(|v| v.as_str())
+        .ok_or("Google did not return an access token.")?.to_string();
+    Ok(GoogleOAuthTokens { id_token, access_token })
+}
+
 fn projects_directory(app: &AppHandle) -> Result<PathBuf, String> {
     let mut directory = app.path().app_data_dir().map_err(|e| format!("Cannot locate local app data: {e}"))?;
     directory.push("projects");
@@ -299,8 +430,10 @@ fn export_timeline(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
-            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, write_project_file
+            export_clip, export_timeline, list_projects, load_project, save_project, delete_project, write_project_file, google_desktop_oauth
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ghous Cut");
