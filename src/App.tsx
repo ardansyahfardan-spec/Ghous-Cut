@@ -855,6 +855,15 @@ export default function App() {
     }
   };
 
+  // Automatically check for desktop updates after startup, once the project library is ready.
+  useEffect(() => {
+    if (!isDesktopApp) return;
+    const timer = window.setTimeout(() => {
+      void handleCheckUpdates();
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const handleGoogleSignIn = async () => {
     setAuthBusy(true);
     try {
